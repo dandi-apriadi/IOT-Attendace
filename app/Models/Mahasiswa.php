@@ -30,4 +30,9 @@ class Mahasiswa extends Model
     {
         return $this->hasMany(Absensi::class);
     }
+
+    public function corrections()
+    {
+        return $this->hasMany(Correction::class);
+    }
 }

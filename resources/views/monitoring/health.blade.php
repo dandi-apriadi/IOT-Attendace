@@ -4,15 +4,18 @@
 <div class="stats-grid">
     <div class="glass-card">
         <div style="font-size: 0.8rem; color: var(--text-muted);">ONLINE DEVICES</div>
-        <div style="font-size: 2.5rem; font-weight: 800; color: #1DB173;">18 <span style="font-size: 1rem; opacity: 0.5;">/ 20</span></div>
+        <div style="font-size: 2.5rem; font-weight: 800; color: #1DB173;">{{ $onlineDevices }} <span style="font-size: 1rem; opacity: 0.5;">/ {{ $totalDevices }}</span></div>
+        <div style="font-size: 0.8rem; color: #6b7280; margin-top: 0.5rem;">Real-time dari tabel devices</div>
     </div>
     <div class="glass-card">
         <div style="font-size: 0.8rem; color: var(--text-muted);">AVG. LATENCY</div>
-        <div style="font-size: 2.5rem; font-weight: 800;">45ms</div>
+        <div style="font-size: 2.5rem; font-weight: 800;">{{ $avgLatency }}ms</div>
+        <div style="font-size: 0.8rem; color: #6b7280; margin-top: 0.5rem;">Dari payload terakhir</div>
     </div>
     <div class="glass-card">
         <div style="font-size: 0.8rem; color: var(--text-muted);">TODAY'S PAYLOADS</div>
-        <div style="font-size: 2.5rem; font-weight: 800;">4,502</div>
+        <div style="font-size: 2.5rem; font-weight: 800;">{{ number_format($todaysPayloads) }}</div>
+        <div style="font-size: 0.8rem; color: #6b7280; margin-top: 0.5rem;">Data absensi hari ini</div>
     </div>
 </div>
 
@@ -22,42 +25,36 @@
         <thead>
             <tr>
                 <th>Device ID</th>
-                <th>Location</th>
-                <th>Type</th>
-                <th>Firmware</th>
+                <th>Nama Device</th>
                 <th>Status</th>
-                <th>Last Ping</th>
+                <th>Aktif</th>
+                <th>Last Seen</th>
                 <th>Action</th>
             </tr>
         </thead>
         <tbody>
-            <tr>
-                <td style="font-family: monospace; font-weight: 700;">ESP32-R402</td>
-                <td>Gedung Elektro Lt. 4</td>
-                <td>RFID + Camera</td>
-                <td>v2.1.0</td>
-                <td><span class="status-pill status-present">Healthy</span></td>
-                <td>2s ago</td>
-                <td><button class="btn-kinetic" style="padding: 0.5rem; background: #F1F3F5;"><i class="fas fa-sync"></i></button></td>
-            </tr>
-            <tr>
-                <td style="font-family: monospace; font-weight: 700;">ESP32-R102</td>
-                <td>Lab. Jaringan Lt. 1</td>
-                <td>RFID Reader</td>
-                <td>v2.0.5</td>
-                <td><span class="status-pill status-late" style="background: #FFF4E6; color: #E6A23C;">Low Signal</span></td>
-                <td>15s ago</td>
-                <td><button class="btn-kinetic" style="padding: 0.5rem; background: #F1F3F5;"><i class="fas fa-sync"></i></button></td>
-            </tr>
-            <tr>
-                <td style="font-family: monospace; font-weight: 700;">READER-L001</td>
-                <td>Lobi Utama</td>
-                <td>Barcode Scanner</td>
-                <td>v1.8.0</td>
-                <td><span class="status-pill status-absent">Offline</span></td>
-                <td>1h ago</td>
-                <td><button class="btn-kinetic" style="padding: 0.5rem; background: #BA1A1A; color: #fff;"><i class="fas fa-power-off"></i></button></td>
-            </tr>
+            @forelse ($devices as $device)
+                <tr>
+                    <td style="font-family: monospace; font-weight: 700;">{{ $device->device_id }}</td>
+                    <td>{{ $device->name }}</td>
+                    <td><span class="status-pill" style="background: {{ $device->is_active ? '#E6F6EC' : '#FADBD8' }}; color: {{ $device->is_active ? '#1DB173' : '#BA1A1A' }};">
+                        {{ $device->is_active ? 'Online' : 'Offline' }}
+                    </span></td>
+                    <td>
+                        <input type="checkbox" {{ $device->is_active ? 'checked' : '' }} disabled style="cursor: not-allowed;">
+                    </td>
+                    <td style="font-size: 0.85rem; color: #6b7280;">{{ $device->last_seen_at?->diffForHumans() ?? '-' }}</td>
+                    <td>
+                        <button class="btn-kinetic" style="padding: 0.5rem; background: {{ $device->is_active ? '#F1F3F5' : '#BA1A1A' }}; color: {{ $device->is_active ? '#000' : '#fff' }};">
+                            <i class="fas {{ $device->is_active ? 'fa-sync' : 'fa-power-off' }}"></i>
+                        </button>
+                    </td>
+                </tr>
+            @empty
+                <tr>
+                    <td colspan="6" style="text-align: center; color: #6b7280; padding: 2rem;">Belum ada device yang terdaftar</td>
+                </tr>
+            @endforelse
         </tbody>
     </table>
 </div>

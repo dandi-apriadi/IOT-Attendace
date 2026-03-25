@@ -49,7 +49,17 @@ Sistem absensi otomatis berbasis IoT dan Framework Laravel yang mendukung berbag
     php artisan migrate
     ```
 
-5.  **Run Dev Server:**
+5.  **Seed Default IoT Devices:**
+    ```bash
+    php artisan db:seed
+    ```
+
+6.  **Generate Device Token Baru (Opsional):**
+    ```bash
+    php artisan device:token ROOM_201 --name="ESP32 Room 201" --store
+    ```
+
+7.  **Run Dev Server:**
     ```bash
     php artisan serve
     ```

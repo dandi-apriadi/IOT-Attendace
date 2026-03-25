@@ -4,7 +4,7 @@
 <div class="glass-card">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
         <h3 class="display-font">Data Mata Kuliah</h3>
-        <button class="btn-kinetic"><i class="fas fa-plus"></i> Tambah MK</button>
+        <span style="font-size:0.85rem; color:#6b7280;">Total {{ number_format($mataKuliahList->total()) }} mata kuliah</span>
     </div>
     
     <table>
@@ -13,42 +13,27 @@
                 <th>Kode MK</th>
                 <th>Nama Mata Kuliah</th>
                 <th>SKS</th>
-                <th>Semester</th>
-                <th>Aksi</th>
+                <th>Dipakai di Jadwal</th>
             </tr>
         </thead>
         <tbody>
-            <tr>
-                <td style="font-family: monospace; font-weight: 700;">MK-001</td>
-                <td>Pemrograman Web Lanjut</td>
-                <td>3</td>
-                <td>4</td>
-                <td>
-                    <button class="btn-kinetic" style="padding: 0.5rem; background: #F1F3F5;"><i class="fas fa-edit"></i></button>
-                    <button class="btn-kinetic" style="padding: 0.5rem; background: #FDECEC; color: #BA1A1A;"><i class="fas fa-trash"></i></button>
-                </td>
-            </tr>
-            <tr>
-                <td style="font-family: monospace; font-weight: 700;">MK-002</td>
-                <td>IoT & Sistem Tertanam</td>
-                <td>4</td>
-                <td>4</td>
-                <td>
-                    <button class="btn-kinetic" style="padding: 0.5rem; background: #F1F3F5;"><i class="fas fa-edit"></i></button>
-                    <button class="btn-kinetic" style="padding: 0.5rem; background: #FDECEC; color: #BA1A1A;"><i class="fas fa-trash"></i></button>
-                </td>
-            </tr>
-            <tr>
-                <td style="font-family: monospace; font-weight: 700;">MK-003</td>
-                <td>Keamanan Jaringan</td>
-                <td>2</td>
-                <td>5</td>
-                <td>
-                    <button class="btn-kinetic" style="padding: 0.5rem; background: #F1F3F5;"><i class="fas fa-edit"></i></button>
-                    <button class="btn-kinetic" style="padding: 0.5rem; background: #FDECEC; color: #BA1A1A;"><i class="fas fa-trash"></i></button>
-                </td>
-            </tr>
+            @forelse ($mataKuliahList as $mk)
+                <tr>
+                    <td style="font-family: monospace; font-weight: 700;">{{ $mk->kode_mk }}</td>
+                    <td>{{ $mk->nama_mk }}</td>
+                    <td>{{ $mk->sks }}</td>
+                    <td>{{ number_format($mk->jadwal_count) }} jadwal</td>
+                </tr>
+            @empty
+                <tr>
+                    <td colspan="4" style="text-align:center; color:#6b7280;">Belum ada data mata kuliah.</td>
+                </tr>
+            @endforelse
         </tbody>
     </table>
+
+    <div style="margin-top:1rem;">
+        {{ $mataKuliahList->links() }}
+    </div>
 </div>
 @endsection

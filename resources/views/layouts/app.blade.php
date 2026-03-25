@@ -42,7 +42,7 @@
 
                 <div style="margin: 1.5rem 0 0.5rem 1rem; font-size: 0.75rem; opacity: 0.5; text-transform: uppercase; letter-spacing: 0.1em;">Admin & Reports</div>
                 
-                <div class="nav-item"><a href="{{ route('reports') }}" class="nav-link {{ Route::is('reports') ? 'active' : '' }}"><i class="fas fa-file-invoice"></i> Laporan</a></div>
+                <div class="nav-item"><a href="{{ route('reports.index') }}" class="nav-link {{ Route::is('reports.index') ? 'active' : '' }}"><i class="fas fa-file-invoice"></i> Laporan</a></div>
                 @if (auth()->user()?->role === 'admin')
                     <div class="nav-item"><a href="{{ route('audit-log') }}" class="nav-link {{ Route::is('audit-log') ? 'active' : '' }}"><i class="fas fa-history"></i> Audit Log</a></div>
                 @endif

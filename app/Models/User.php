@@ -43,4 +43,14 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+    public function corrections()
+    {
+        return $this->hasMany(Correction::class);
+    }
+
+    public function approvedCorrections()
+    {
+        return $this->hasMany(Correction::class, 'approved_by');
+    }
 }
