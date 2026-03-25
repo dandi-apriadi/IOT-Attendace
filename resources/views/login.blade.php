@@ -13,8 +13,12 @@
             align-items: center;
             justify-content: center;
             min-height: 100vh;
-            background: var(--primary-blue);
+            background: linear-gradient(rgba(0, 30, 64, 0.7), rgba(0, 30, 64, 0.7)), url('{{ asset("images/background.png") }}');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
             padding: 20px;
+            font-family: 'Inter', sans-serif;
         }
         .login-card {
             max-width: 440px;
