@@ -12,4 +12,4 @@ use App\Http\Controllers\Api\AttendanceController;
 |
 */
 
-Route::post('/absensi', [AttendanceController.php::class, 'store']);
+Route::post('/absensi', [AttendanceController::class, 'store'])->middleware('device.token');

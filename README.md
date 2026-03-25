@@ -62,6 +62,13 @@ Sistem absensi otomatis berbasis IoT dan Framework Laravel yang mendukung berbag
 | :--- | :--- | :--- |
 | `POST` | `/api/absensi` | Mengirim data absensi dari perangkat IoT. |
 
+### Header Keamanan API (Wajib)
+
+- `X-Device-Token`: Token autentikasi perangkat.
+- `X-Device-Id`: ID perangkat unik (mode per-device dari tabel `devices`).
+
+Jika `X-Device-Id` tidak dikirim, sistem akan fallback ke token global `.env` (`DEVICE_API_TOKEN`) untuk kompatibilitas.
+
 **Contoh Payload JSON:**
 ```json
 {

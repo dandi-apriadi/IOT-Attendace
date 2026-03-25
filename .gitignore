@@ -2,6 +2,11 @@
 /public/hot
 /public/storage
 /storage/*.key
+/storage/framework/cache/data/*
+/storage/framework/sessions/*
+/storage/framework/testing/*
+/storage/framework/views/*
+/storage/logs/*
 /vendor
 .env
 .env.backup
@@ -17,3 +22,5 @@ yarn-error.log
 /.idea
 /.vscode
 /data/konsep.jpeg
+/tmp/
+*.log

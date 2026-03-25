@@ -72,14 +72,21 @@
         <h2 class="display-font" style="margin-bottom: 0.5rem;">Tech-Presence</h2>
         <p style="opacity: 0.6; margin-bottom: 3rem;">Politeknik Negeri Manado IoT Gateway</p>
         
-        <form action="{{ route('dashboard') }}" method="GET">
+        @if ($errors->any())
+            <div style="background: rgba(186, 26, 26, 0.2); border: 1px solid rgba(186, 26, 26, 0.5); padding: 0.75rem; border-radius: 10px; margin-bottom: 1rem; text-align: left; font-size: 0.9rem;">
+                {{ $errors->first() }}
+            </div>
+        @endif
+
+        <form action="{{ route('login.attempt') }}" method="POST">
+            @csrf
             <div class="form-group">
                 <label class="form-label">Email / User ID</label>
-                <input type="text" class="form-control" placeholder="admin@poltek.ac.id">
+                <input type="email" name="email" class="form-control" placeholder="admin@poltek.ac.id" value="{{ old('email') }}" required>
             </div>
             <div class="form-group">
                 <label class="form-label">Password</label>
-                <input type="password" class="form-control" placeholder="••••••••">
+                <input type="password" name="password" class="form-control" placeholder="••••••••" required>
             </div>
             <button type="submit" class="btn-kinetic login-btn">MASUK SEKARANG</button>
         </form>
