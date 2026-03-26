@@ -36,9 +36,9 @@
         <thead>
             <tr>
                 <th>Mahasiswa</th>
-                <th>Hadir</th>
-                <th>Sakit/Izin</th>
-                <th>Alpa</th>
+                <th>{{ $reportStatusLabels['hadir'] ?? 'Hadir' }}</th>
+                <th>{{ $reportStatusLabels['sakit_izin'] ?? 'Sakit/Izin' }}</th>
+                <th>{{ $reportStatusLabels['alpa'] ?? 'Alpa' }}</th>
                 <th>Persentase</th>
             </tr>
         </thead>

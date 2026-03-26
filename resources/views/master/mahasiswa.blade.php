@@ -57,7 +57,11 @@
         <tbody>
             @forelse ($mahasiswaList as $mahasiswa)
                 <tr>
-                    <td style="font-family: monospace;">{{ $mahasiswa->nim }}</td>
+                    <td>
+                        <div style="font-family: monospace; font-weight: 700; color: var(--primary-blue-container); background: #F1F3F5; padding: 2px 8px; border-radius: 4px; display: inline-block;">
+                            {{ $mahasiswa->nim }}
+                        </div>
+                    </td>
                     <td style="font-weight: 700;">{{ $mahasiswa->nama }}</td>
                     <td>{{ $mahasiswa->kelas?->nama_kelas ?? '-' }}</td>
                     <td>
@@ -97,7 +101,7 @@
         </tbody>
     </table>
 
-    <div style="margin-top: 1rem;">
+    <div class="pagination-container">
         {{ $mahasiswaList->links() }}
     </div>
 </div>

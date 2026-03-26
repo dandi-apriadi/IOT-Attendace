@@ -17,6 +17,12 @@
         <div style="font-size: 2.5rem; font-weight: 800;">{{ number_format($todaysPayloads) }}</div>
         <div style="font-size: 0.8rem; color: #6b7280; margin-top: 0.5rem;">Data absensi hari ini</div>
     </div>
+    <div class="glass-card">
+        <div style="font-size: 0.8rem; color: var(--text-muted);">LATENCY TREND (24H)</div>
+        <div style="font-size: 1.15rem; font-weight: 700; margin-top: 0.35rem;">AVG {{ number_format($latencyStats24h['avg_ms'] ?? 0, 2) }} ms</div>
+        <div style="font-size: 0.9rem; color: #6b7280; margin-top: 0.25rem;">P95 {{ number_format($latencyStats24h['p95_ms'] ?? 0, 2) }} ms</div>
+        <div style="font-size: 0.8rem; color: #6b7280; margin-top: 0.4rem;">Latest {{ number_format($latencyStats24h['latest_ms'] ?? 0, 2) }} ms · Samples {{ number_format($latencyStats24h['sample_count'] ?? 0) }}</div>
+    </div>
 </div>
 
 <div class="glass-card">
@@ -62,10 +68,20 @@
 <div class="glass-card" style="margin-top: 2rem; background: #191C1E; color: #fff;">
     <h3 class="display-font" style="margin-bottom: 1.5rem; color: var(--kinetic-yellow);">Technical API Debug Console</h3>
     <div style="background: #000; padding: 1.5rem; border-radius: 12px; font-family: 'Courier New', Courier, monospace; font-size: 0.85rem; overflow-x: auto;">
-        <div style="color: #61afef;">[13:22:01] <span style="color: #98c379;">SUCCESS</span>: Payload received from ESP32-R402</div>
-        <div style="color: #61afef;">[13:22:05] <span style="color: #e06c75;">ERROR</span>: Authentication Failure (Invalid Token) - READER-L001</div>
-        <div style="color: #61afef;">[13:22:15] <span style="color: #d19a66;">WARN</span>: High Latency detected on Segment B - ESP32-R102</div>
-        <div style="color: #abb2bf;">[13:22:45] <span style="color: #61afef;">INFO</span>: System audit log rotated.</div>
+        @forelse ($recentEvents as $event)
+            @php
+                $level = str_contains($event->action, 'failed') ? 'ERROR' : ($event->action === 'login' ? 'SUCCESS' : 'INFO');
+                $levelColor = $level === 'ERROR' ? '#e06c75' : ($level === 'SUCCESS' ? '#98c379' : '#61afef');
+                $time = $event->created_at?->format('H:i:s') ?? '--:--:--';
+            @endphp
+            <div style="color: #abb2bf;">
+                [{{ $time }}]
+                <span style="color: {{ $levelColor }};">{{ $level }}</span>:
+                {{ $event->description ?? $event->action }}
+            </div>
+        @empty
+            <div style="color: #abb2bf;">Belum ada event audit di database.</div>
+        @endforelse
     </div>
 </div>
 @endsection

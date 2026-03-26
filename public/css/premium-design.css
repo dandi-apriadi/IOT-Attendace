@@ -273,3 +273,41 @@ tr:nth-child(even) td {
 .status-present { background: #E6F6EC; color: #1DB173; }
 .status-late { background: #FFF4E6; color: #705D00; }
 .status-absent { background: #FDECEC; color: #BA1A1A; }
+
+/* Pagination Styling */
+.pagination-container {
+    margin-top: 2rem;
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.pagination-container nav {
+    width: 100%;
+}
+
+.pagination-container svg {
+    width: 1.25rem;
+    height: 1.25rem;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+/* Fix for massive SVG icons in Laravel default pagination */
+nav[role="navigation"] div.flex-1 {
+    display: none;
+}
+
+nav[role="navigation"] div.hidden.sm\:flex-1 {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.pagination-info {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-weight: 600;
+}

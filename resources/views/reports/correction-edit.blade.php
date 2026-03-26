@@ -29,6 +29,22 @@
             @enderror
         </div>
 
+        <!-- Jadwal Selection -->
+        <div style="margin-bottom: 2rem;">
+            <label style="display: block; font-weight: 700; margin-bottom: 0.5rem;">Jadwal Kuliah</label>
+            <select name="jadwal_id" required style="width: 100%; padding: 0.75rem; border: 1px solid #e5e7eb; border-radius: 8px;">
+                <option value="">Pilih Jadwal...</option>
+                @foreach($jadwals as $jadwal)
+                    <option value="{{ $jadwal->id }}" {{ (isset($correction) && $correction->jadwal_id === $jadwal->id) || old('jadwal_id') === (string)$jadwal->id ? 'selected' : '' }}>
+                        {{ $jadwal->mata_kuliah?->kode_mk ?? '-' }} - {{ $jadwal->mata_kuliah?->nama_mk ?? '-' }} | {{ $jadwal->kelas?->nama_kelas ?? '-' }} | {{ $jadwal->hari }} {{ $jadwal->jam_mulai }}-{{ $jadwal->jam_selesai }}
+                    </option>
+                @endforeach
+            </select>
+            @error('jadwal_id')
+                <div style="color: #BA1A1A; font-size: 0.85rem; margin-top: 0.25rem;">{{ $message }}</div>
+            @enderror
+        </div>
+
         <!-- Tanggal Koreksi -->
         <div style="margin-bottom: 2rem;">
             <label style="display: block; font-weight: 700; margin-bottom: 0.5rem;">Tanggal Absensi</label>
@@ -43,9 +59,9 @@
             <label style="display: block; font-weight: 700; margin-bottom: 0.5rem;">Status Saat Ini</label>
             <select name="status_lama" required style="width: 100%; padding: 0.75rem; border: 1px solid #e5e7eb; border-radius: 8px;">
                 <option value="">Pilih Status...</option>
-                <option value="hadir" {{ (isset($correction) && $correction->status_lama === 'hadir') || old('status_lama') === 'hadir' ? 'selected' : '' }}>Hadir</option>
-                <option value="sakit_izin" {{ (isset($correction) && $correction->status_lama === 'sakit_izin') || old('status_lama') === 'sakit_izin' ? 'selected' : '' }}>Sakit/Izin</option>
-                <option value="alpa" {{ (isset($correction) && $correction->status_lama === 'alpa') || old('status_lama') === 'alpa' ? 'selected' : '' }}>Alpa</option>
+                @foreach(($statusOptions ?? []) as $value => $label)
+                    <option value="{{ $value }}" {{ (isset($correction) && $correction->status_lama === $value) || old('status_lama') === $value ? 'selected' : '' }}>{{ $label }}</option>
+                @endforeach
             </select>
             @error('status_lama')
                 <div style="color: #BA1A1A; font-size: 0.85rem; margin-top: 0.25rem;">{{ $message }}</div>
@@ -57,9 +73,9 @@
             <label style="display: block; font-weight: 700; margin-bottom: 0.5rem;">Status Koreksi</label>
             <select name="status_baru" required style="width: 100%; padding: 0.75rem; border: 1px solid #e5e7eb; border-radius: 8px;">
                 <option value="">Pilih Status...</option>
-                <option value="hadir" {{ (isset($correction) && $correction->status_baru === 'hadir') || old('status_baru') === 'hadir' ? 'selected' : '' }}>Hadir</option>
-                <option value="sakit_izin" {{ (isset($correction) && $correction->status_baru === 'sakit_izin') || old('status_baru') === 'sakit_izin' ? 'selected' : '' }}>Sakit/Izin</option>
-                <option value="alpa" {{ (isset($correction) && $correction->status_baru === 'alpa') || old('status_baru') === 'alpa' ? 'selected' : '' }}>Alpa</option>
+                @foreach(($statusOptions ?? []) as $value => $label)
+                    <option value="{{ $value }}" {{ (isset($correction) && $correction->status_baru === $value) || old('status_baru') === $value ? 'selected' : '' }}>{{ $label }}</option>
+                @endforeach
             </select>
             @error('status_baru')
                 <div style="color: #BA1A1A; font-size: 0.85rem; margin-top: 0.25rem;">{{ $message }}</div>
@@ -94,9 +110,9 @@
             <div style="margin-bottom: 2rem;">
                 <label style="display: block; font-weight: 700; margin-bottom: 0.5rem;">Status Persetujuan</label>
                 <select name="approval_status" style="width: 100%; padding: 0.75rem; border: 1px solid #e5e7eb; border-radius: 8px;">
-                    <option value="pending" {{ (isset($correction) && $correction->approval_status === 'pending') || old('approval_status') === 'pending' ? 'selected' : '' }}>Pending</option>
-                    <option value="approved" {{ (isset($correction) && $correction->approval_status === 'approved') || old('approval_status') === 'approved' ? 'selected' : '' }}>Disetujui</option>
-                    <option value="rejected" {{ (isset($correction) && $correction->approval_status === 'rejected') || old('approval_status') === 'rejected' ? 'selected' : '' }}>Ditolak</option>
+                    @foreach(($approvalStatusOptions ?? []) as $value => $label)
+                        <option value="{{ $value }}" {{ (isset($correction) && $correction->approval_status === $value) || old('approval_status') === $value ? 'selected' : '' }}>{{ $label }}</option>
+                    @endforeach
                 </select>
             </div>
 

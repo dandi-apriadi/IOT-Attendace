@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Services\AuditLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -19,6 +20,12 @@ class AuthenticatedSessionController extends Controller
         ]);
 
         if (! Auth::attempt($credentials, false)) {
+            AuditLogger::log(
+                $request,
+                'login_failed',
+                'Login gagal untuk email: ' . $request->input('email')
+            );
+
             Log::warning('Login gagal', [
                 'email' => $request->input('email'),
                 'ip' => $request->ip(),
@@ -31,6 +38,13 @@ class AuthenticatedSessionController extends Controller
         }
 
         $request->session()->regenerate();
+
+        AuditLogger::log(
+            $request,
+            'login',
+            'Login berhasil untuk email: ' . $request->input('email'),
+            Auth::id()
+        );
 
         Log::info('Login berhasil', [
             'user_id' => Auth::id(),

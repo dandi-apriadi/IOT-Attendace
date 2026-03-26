@@ -41,6 +41,7 @@ Route::middleware(['auth', 'role:admin,dosen'])->group(function () {
     // Operational
     Route::get('/dosen/session', [DosenSessionController::class, 'create'])->name('dosen-session');
     Route::get('/monitoring/live', [MonitoringLiveController::class, 'index'])->name('monitoring');
+    Route::get('/monitoring/live/data', [MonitoringLiveController::class, 'data'])->name('monitoring.live.data');
     Route::get('/monitoring/health', [MonitoringHealthController::class, 'index'])->name('iot-health');
     Route::get('/monitoring/performance/reports', [MonitoringPerformanceController::class, 'reports'])->name('monitoring.performance.reports');
     Route::get('/monitoring/performance/reports-view', [MonitoringViewController::class, 'performanceReports'])->name('monitoring.performance.view');
@@ -63,6 +64,10 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::put('/master/mahasiswa/{mahasiswa}', [MahasiswaController::class, 'update'])->name('mahasiswa.update');
     Route::delete('/master/mahasiswa/{mahasiswa}', [MahasiswaController::class, 'destroy'])->name('mahasiswa.destroy');
     Route::get('/master/matakuliah', [MasterDataController::class, 'mataKuliah'])->name('matakuliah');
+    Route::post('/master/matakuliah', [MasterDataController::class, 'storeMataKuliah'])->name('matakuliah.store');
+    Route::get('/master/matakuliah/{id}/edit', [MasterDataController::class, 'editMataKuliah'])->name('matakuliah.edit');
+    Route::put('/master/matakuliah/{id}', [MasterDataController::class, 'updateMataKuliah'])->name('matakuliah.update');
+    Route::delete('/master/matakuliah/{id}', [MasterDataController::class, 'destroyMataKuliah'])->name('matakuliah.destroy');
     Route::get('/master/kelas', [MasterDataController::class, 'kelas'])->name('kelas');
     Route::get('/master/jadwal', [MasterDataController::class, 'jadwal'])->name('jadwal');
     Route::get('/master/users', [UserController::class, 'index'])->name('users');

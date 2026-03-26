@@ -98,7 +98,7 @@ class TestApiEndpoint extends Command
             $response = $controller->store($request);
             $data = json_decode($response->getContent(), true);
 
-            if ($data['status'] === 'success') {
+            if (($data['status'] ?? null) === 'success') {
                 $this->info("✓ Request Status: SUCCESS");
                 $this->line("  Response: " . json_encode($data['data'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
                 $this->line("  Mahasiswa: " . $data['data']['nama']);
@@ -106,7 +106,8 @@ class TestApiEndpoint extends Command
                 $this->line("  Waktu: " . $data['data']['waktu']);
                 $this->line("  Status: " . $data['data']['keterangan']);
             } else {
-                $this->warn("⚠ Request returned: " . $data['message']);
+                $this->warn("⚠ Request returned: " . ($data['message'] ?? 'Unexpected response'));
+                $this->line("  HTTP Status: " . $response->getStatusCode());
             }
         } catch (\Exception $e) {
             $this->error("✗ Test 1 Failed: " . $e->getMessage());

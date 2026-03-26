@@ -12,4 +12,5 @@ use App\Http\Controllers\Api\AttendanceController;
 |
 */
 
-Route::post('/absensi', [AttendanceController::class, 'store'])->middleware('device.token');
+Route::post('/absensi', [AttendanceController::class, 'store'])
+	->middleware(['device.token', 'throttle:120,1']);

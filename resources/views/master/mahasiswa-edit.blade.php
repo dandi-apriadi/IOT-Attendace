@@ -15,18 +15,18 @@
         @method('PUT')
 
         <div>
-            <label style="font-size:0.75rem; color:#6b7280; display:block; margin-bottom:0.4rem;">NIM</label>
-            <input name="nim" type="text" value="{{ old('nim', $mahasiswa->nim) }}" style="width:100%; padding:0.75rem; border:none; background:#F1F3F5; border-radius:8px;" required>
+            <label for="nim" style="font-size:0.75rem; color:#6b7280; display:block; margin-bottom:0.4rem;">NIM</label>
+            <input id="nim" name="nim" type="text" value="{{ old('nim', $mahasiswa->nim) }}" style="width:100%; padding:0.75rem; border:none; background:#F1F3F5; border-radius:8px;" required>
         </div>
 
         <div>
-            <label style="font-size:0.75rem; color:#6b7280; display:block; margin-bottom:0.4rem;">Nama</label>
-            <input name="nama" type="text" value="{{ old('nama', $mahasiswa->nama) }}" style="width:100%; padding:0.75rem; border:none; background:#F1F3F5; border-radius:8px;" required>
+            <label for="nama" style="font-size:0.75rem; color:#6b7280; display:block; margin-bottom:0.4rem;">Nama</label>
+            <input id="nama" name="nama" type="text" value="{{ old('nama', $mahasiswa->nama) }}" style="width:100%; padding:0.75rem; border:none; background:#F1F3F5; border-radius:8px;" required>
         </div>
 
         <div>
-            <label style="font-size:0.75rem; color:#6b7280; display:block; margin-bottom:0.4rem;">Kelas</label>
-            <select name="kelas_id" style="width:100%; padding:0.75rem; border:none; background:#F1F3F5; border-radius:8px;" required>
+            <label for="kelas_id" style="font-size:0.75rem; color:#6b7280; display:block; margin-bottom:0.4rem;">Kelas</label>
+            <select id="kelas_id" name="kelas_id" style="width:100%; padding:0.75rem; border:none; background:#F1F3F5; border-radius:8px;" required>
                 @foreach ($kelasList as $kelas)
                     <option value="{{ $kelas->id }}" {{ (string) old('kelas_id', $mahasiswa->kelas_id) === (string) $kelas->id ? 'selected' : '' }}>{{ $kelas->nama_kelas }}</option>
                 @endforeach
@@ -34,23 +34,23 @@
         </div>
 
         <div>
-            <label style="font-size:0.75rem; color:#6b7280; display:block; margin-bottom:0.4rem;">RFID UID</label>
-            <input name="rfid_uid" type="text" value="{{ old('rfid_uid', $mahasiswa->rfid_uid) }}" style="width:100%; padding:0.75rem; border:none; background:#F1F3F5; border-radius:8px;">
+            <label for="rfid_uid" style="font-size:0.75rem; color:#6b7280; display:block; margin-bottom:0.4rem;">RFID UID</label>
+            <input id="rfid_uid" name="rfid_uid" type="text" value="{{ old('rfid_uid', $mahasiswa->rfid_uid) }}" style="width:100%; padding:0.75rem; border:none; background:#F1F3F5; border-radius:8px;">
         </div>
 
         <div>
-            <label style="font-size:0.75rem; color:#6b7280; display:block; margin-bottom:0.4rem;">Barcode ID</label>
-            <input name="barcode_id" type="text" value="{{ old('barcode_id', $mahasiswa->barcode_id) }}" style="width:100%; padding:0.75rem; border:none; background:#F1F3F5; border-radius:8px;">
+            <label for="barcode_id" style="font-size:0.75rem; color:#6b7280; display:block; margin-bottom:0.4rem;">Barcode ID</label>
+            <input id="barcode_id" name="barcode_id" type="text" value="{{ old('barcode_id', $mahasiswa->barcode_id) }}" style="width:100%; padding:0.75rem; border:none; background:#F1F3F5; border-radius:8px;">
         </div>
 
         <div>
-            <label style="font-size:0.75rem; color:#6b7280; display:block; margin-bottom:0.4rem;">Fingerprint Data</label>
-            <input name="fingerprint_data" type="text" value="{{ old('fingerprint_data', $mahasiswa->fingerprint_data) }}" style="width:100%; padding:0.75rem; border:none; background:#F1F3F5; border-radius:8px;">
+            <label for="fingerprint_data" style="font-size:0.75rem; color:#6b7280; display:block; margin-bottom:0.4rem;">Fingerprint Data</label>
+            <input id="fingerprint_data" name="fingerprint_data" type="text" value="{{ old('fingerprint_data', $mahasiswa->fingerprint_data) }}" style="width:100%; padding:0.75rem; border:none; background:#F1F3F5; border-radius:8px;">
         </div>
 
         <div style="grid-column:1/-1;">
-            <label style="font-size:0.75rem; color:#6b7280; display:block; margin-bottom:0.4rem;">Face Model Data</label>
-            <textarea name="face_model_data" style="width:100%; padding:0.75rem; border:none; background:#F1F3F5; border-radius:8px; min-height:90px;">{{ old('face_model_data', $mahasiswa->face_model_data) }}</textarea>
+            <label for="face_model_data" style="font-size:0.75rem; color:#6b7280; display:block; margin-bottom:0.4rem;">Face Model Data</label>
+            <textarea id="face_model_data" name="face_model_data" style="width:100%; padding:0.75rem; border:none; background:#F1F3F5; border-radius:8px; min-height:90px;">{{ old('face_model_data', $mahasiswa->face_model_data) }}</textarea>
         </div>
 
         <div style="grid-column:1/-1; display:flex; gap:0.75rem; margin-top:0.5rem;">

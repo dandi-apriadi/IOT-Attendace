@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Kelas;
 use App\Models\Mahasiswa;
+use App\Services\AuditLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -41,7 +42,14 @@ class MahasiswaController extends Controller
     {
         $data = $this->validatePayload($request);
 
-        Mahasiswa::create($data);
+        $mahasiswa = Mahasiswa::create($data);
+
+        AuditLogger::log(
+            $request,
+            'tambah_mahasiswa',
+            'Menambahkan mahasiswa ' . $mahasiswa->nama . ' (' . $mahasiswa->nim . ')',
+            $request->user()?->id
+        );
 
         return redirect()->route('mahasiswa')->with('success', 'Mahasiswa berhasil ditambahkan.');
     }
@@ -72,15 +80,19 @@ class MahasiswaController extends Controller
 
     public function show(Mahasiswa $mahasiswa): View
     {
+        $presentStatuses = (array) config('attendance.absensi_present_statuses', ['Hadir']);
+        $excusedStatuses = (array) config('attendance.absensi_excused_statuses', ['Sakit', 'Izin']);
+        $absentStatus = (string) config('attendance.absensi_absent_status', 'Alpa');
+
         $absensiHistory = $mahasiswa->absensi()
             ->with(['jadwal.mataKuliah'])
             ->latest()
             ->paginate(15);
 
         $totalAbsensi = $mahasiswa->absensi()->count();
-        $hadirCount = $mahasiswa->absensi()->where('status', 'hadir')->count();
-        $sabitIzinCount = $mahasiswa->absensi()->where('status', 'sakit_izin')->count();
-        $alpaCount = $mahasiswa->absensi()->where('status', 'alpa')->count();
+        $hadirCount = $mahasiswa->absensi()->whereIn('status', $presentStatuses)->count();
+        $sabitIzinCount = $mahasiswa->absensi()->whereIn('status', $excusedStatuses)->count();
+        $alpaCount = $mahasiswa->absensi()->where('status', $absentStatus)->count();
 
         $persentaseHadir = $totalAbsensi > 0 ? round(($hadirCount / $totalAbsensi) * 100, 2) : 0;
 
@@ -88,7 +100,7 @@ class MahasiswaController extends Controller
             ->whereMonth('created_at', now()->month)
             ->count();
         $thisMonthHadir = $mahasiswa->absensi()
-            ->where('status', 'hadir')
+            ->whereIn('status', $presentStatuses)
             ->whereMonth('created_at', now()->month)
             ->count();
 

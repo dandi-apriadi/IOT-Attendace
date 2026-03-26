@@ -14,6 +14,7 @@ class Correction extends Model
     protected $fillable = [
         'user_id',
         'mahasiswa_id',
+        'jadwal_id',
         'tanggal',
         'status_lama',
         'status_baru',
@@ -34,6 +35,11 @@ class Correction extends Model
     public function mahasiswa()
     {
         return $this->belongsTo(Mahasiswa::class);
+    }
+
+    public function jadwal()
+    {
+        return $this->belongsTo(Jadwal::class);
     }
 
     public function approvedBy()

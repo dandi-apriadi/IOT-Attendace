@@ -2,6 +2,12 @@
 
 @section('content')
 <div class="glass-card">
+    @php
+        $pendingBadge = \App\Support\StatusBadge::forApproval('pending');
+        $approvedBadge = \App\Support\StatusBadge::forApproval('approved');
+        $rejectedBadge = \App\Support\StatusBadge::forApproval('rejected');
+    @endphp
+
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
         <div>
             <h3 class="display-font">Laporan Koreksi Data</h3>
@@ -14,19 +20,19 @@
     <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 2rem;">
         <div style="background: #E6F6EC; padding: 1rem; border-radius: 12px; text-align: center;">
             <div style="font-size: 0.8rem; color: #1DB173; font-weight: 700;">Total Permintaan</div>
-            <div style="font-size: 2rem; font-weight: 800; color: #1DB173;">{{ count($corrections) }}</div>
+            <div style="font-size: 2rem; font-weight: 800; color: #1DB173;">{{ (int) ($summaryCounts['total'] ?? 0) }}</div>
         </div>
-        <div style="background: #FEF3C7; padding: 1rem; border-radius: 12px; text-align: center;">
-            <div style="font-size: 0.8rem; color: #F59E0B; font-weight: 700;">Pending</div>
-            <div style="font-size: 2rem; font-weight: 800; color: #F59E0B;">{{ collect($corrections)->where('status', 'pending')->count() }}</div>
+        <div style="background: {{ $pendingBadge['bg'] }}; padding: 1rem; border-radius: 12px; text-align: center;">
+            <div style="font-size: 0.8rem; color: {{ $pendingBadge['text'] }}; font-weight: 700;">{{ $approvalStatusOptions['pending'] ?? 'Pending' }}</div>
+            <div style="font-size: 2rem; font-weight: 800; color: {{ $pendingBadge['text'] }};">{{ (int) ($summaryCounts['pending'] ?? 0) }}</div>
         </div>
-        <div style="background: #E0E7FF; padding: 1rem; border-radius: 12px; text-align: center;">
-            <div style="font-size: 0.8rem; color: #0066CC; font-weight: 700;">Disetujui</div>
-            <div style="font-size: 2rem; font-weight: 800; color: #0066CC;">{{ collect($corrections)->where('status', 'approved')->count() }}</div>
+        <div style="background: {{ $approvedBadge['bg'] }}; padding: 1rem; border-radius: 12px; text-align: center;">
+            <div style="font-size: 0.8rem; color: {{ $approvedBadge['text'] }}; font-weight: 700;">{{ $approvalStatusOptions['approved'] ?? 'Disetujui' }}</div>
+            <div style="font-size: 2rem; font-weight: 800; color: {{ $approvedBadge['text'] }};">{{ (int) ($summaryCounts['approved'] ?? 0) }}</div>
         </div>
-        <div style="background: #FADBD8; padding: 1rem; border-radius: 12px; text-align: center;">
-            <div style="font-size: 0.8rem; color: #BA1A1A; font-weight: 700;">Ditolak</div>
-            <div style="font-size: 2rem; font-weight: 800; color: #BA1A1A;">{{ collect($corrections)->where('status', 'rejected')->count() }}</div>
+        <div style="background: {{ $rejectedBadge['bg'] }}; padding: 1rem; border-radius: 12px; text-align: center;">
+            <div style="font-size: 0.8rem; color: {{ $rejectedBadge['text'] }}; font-weight: 700;">{{ $approvalStatusOptions['rejected'] ?? 'Ditolak' }}</div>
+            <div style="font-size: 2rem; font-weight: 800; color: {{ $rejectedBadge['text'] }};">{{ (int) ($summaryCounts['rejected'] ?? 0) }}</div>
         </div>
     </div>
 
@@ -34,9 +40,9 @@
     <div style="display: flex; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap;">
         <select onchange="window.location.href='{{ route('correction') }}?status='+this.value" style="padding: 0.5rem 1rem; border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; cursor: pointer;">
             <option value="">Semua Status</option>
-            <option value="pending" {{ request('status') === 'pending' ? 'selected' : '' }}>Pending</option>
-            <option value="approved" {{ request('status') === 'approved' ? 'selected' : '' }}>Disetujui</option>
-            <option value="rejected" {{ request('status') === 'rejected' ? 'selected' : '' }}>Ditolak</option>
+            @foreach(($approvalStatusOptions ?? []) as $statusKey => $statusLabel)
+                <option value="{{ $statusKey }}" {{ ($selectedStatus ?? '') === $statusKey ? 'selected' : '' }}>{{ $statusLabel }}</option>
+            @endforeach
         </select>
     </div>
 
@@ -63,10 +69,15 @@
                         <div style="max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ $correction->alasan }}</div>
                     </td>
                     <td style="padding: 0.75rem; text-align: center;">
+                        @php
+                            $statusValue = (string) $correction->status;
+                            $statusLabel = $approvalStatusOptions[$statusValue] ?? ucfirst($statusValue);
+                            $badgeColor = \App\Support\StatusBadge::forApproval($statusValue);
+                        @endphp
                         <span style="display: inline-block; padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700;
-                            background: {{ $correction->status === 'pending' ? '#FEF3C7' : ($correction->status === 'approved' ? '#E0E7FF' : '#FADBD8') }};
-                            color: {{ $correction->status === 'pending' ? '#F59E0B' : ($correction->status === 'approved' ? '#0066CC' : '#BA1A1A') }};">
-                            {{ ucfirst(__('correction.status.'.$correction->status)) }}
+                            background: {{ $badgeColor['bg'] }};
+                            color: {{ $badgeColor['text'] }};">
+                            {{ $statusLabel }}
                         </span>
                     </td>
                     <td style="padding: 0.75rem; text-align: center;">

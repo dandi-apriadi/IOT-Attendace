@@ -17,6 +17,29 @@ class ReportsController extends Controller
     {
         $requestStart = microtime(true);
 
+        $presentStatuses = array_values((array) config('attendance.absensi_present_statuses', ['Hadir']));
+        $excusedStatuses = array_values((array) config('attendance.absensi_excused_statuses', ['Sakit', 'Izin']));
+        $absentStatus = (string) config('attendance.absensi_absent_status', 'Alpa');
+
+        if ($presentStatuses === []) {
+            $presentStatuses = ['Hadir'];
+        }
+
+        if ($excusedStatuses === []) {
+            $excusedStatuses = ['Sakit', 'Izin'];
+        }
+
+        $statusLabels = (array) config('attendance.absensi_statuses', []);
+        $labelFor = static function (string $status) use ($statusLabels): string {
+            return (string) ($statusLabels[$status] ?? $status);
+        };
+
+        $reportStatusLabels = [
+            'hadir' => implode('/', array_map($labelFor, $presentStatuses)),
+            'sakit_izin' => implode('/', array_map($labelFor, $excusedStatuses)),
+            'alpa' => $labelFor($absentStatus),
+        ];
+
         $month = (string) $request->query('month', now()->format('Y-m'));
         [$year, $monthNum] = $this->parseMonth($month);
         $periodStart = CarbonImmutable::create($year, $monthNum, 1)->startOfDay();
@@ -24,6 +47,9 @@ class ReportsController extends Controller
 
         $kelasId = (string) $request->query('kelas_id', '');
         $mataKuliahId = (string) $request->query('mata_kuliah_id', '');
+
+        $presentPlaceholders = implode(', ', array_fill(0, count($presentStatuses), '?'));
+        $excusedPlaceholders = implode(', ', array_fill(0, count($excusedStatuses), '?'));
 
         $query = DB::table('absensi as a')
             ->join('mahasiswa as m', 'm.id', '=', 'a.mahasiswa_id')
@@ -33,11 +59,20 @@ class ReportsController extends Controller
             ->select([
                 'm.id',
                 'm.nama',
-                DB::raw("SUM(CASE WHEN a.status = 'Hadir' THEN 1 ELSE 0 END) AS hadir"),
-                DB::raw("SUM(CASE WHEN a.status IN ('Sakit','Izin') THEN 1 ELSE 0 END) AS sakit_izin"),
-                DB::raw("SUM(CASE WHEN a.status = 'Alpa' THEN 1 ELSE 0 END) AS alpa"),
                 DB::raw('COUNT(*) AS total'),
             ])
+            ->selectRaw(
+                "SUM(CASE WHEN a.status IN ($presentPlaceholders) THEN 1 ELSE 0 END) AS hadir",
+                $presentStatuses
+            )
+            ->selectRaw(
+                "SUM(CASE WHEN a.status IN ($excusedPlaceholders) THEN 1 ELSE 0 END) AS sakit_izin",
+                $excusedStatuses
+            )
+            ->selectRaw(
+                'SUM(CASE WHEN a.status = ? THEN 1 ELSE 0 END) AS alpa',
+                [$absentStatus]
+            )
             ->groupBy('m.id', 'm.nama')
             ->orderByDesc('hadir')
             ->orderBy('m.nama');
@@ -89,6 +124,7 @@ class ReportsController extends Controller
             'selectedKelasId' => $kelasId,
             'selectedMataKuliahId' => $mataKuliahId,
             'selectedMonth' => sprintf('%04d-%02d', $year, $monthNum),
+            'reportStatusLabels' => $reportStatusLabels,
         ]);
     }
 

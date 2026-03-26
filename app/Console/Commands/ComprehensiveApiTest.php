@@ -160,9 +160,11 @@ class ComprehensiveApiTest extends Command
                     ]);
                 
                 if ($response->successful()) {
-                    $this->info("  ✓ Authentication successful (200)");
-                    if ($response->json('status') === 'success') {
+                    $this->info("  ✓ Authentication successful (" . $response->status() . ")");
+                    if (($response->json('status') ?? null) === 'success') {
                         $this->info("  ✓ API returned success");
+                    } else {
+                        $this->warn("  ⚠ API message: " . ($response->json('message') ?? 'Unknown response'));
                     }
                 } else {
                     $this->warn("  ⚠ Status: " . $response->status() . " - " . $response->body());
@@ -238,8 +240,13 @@ class ComprehensiveApiTest extends Command
                 ],
             ];
 
-            foreach ($testCases as $testCase) {
-                $this->line("Test 3." . (array_search($testCase, $testCases) + 1) . ": " . $testCase['name']);
+            foreach ($testCases as $index => $testCase) {
+                $this->line("Test 3." . ($index + 1) . ": " . $testCase['name']);
+
+                if (empty($testCase['identifier'])) {
+                    $this->warn("  ⚠ Skipped: identifier untuk metode " . $testCase['type'] . " belum tersedia di data mahasiswa");
+                    continue;
+                }
                 
                 try {
                     $response = Http::timeout(30)
@@ -254,10 +261,10 @@ class ComprehensiveApiTest extends Command
                     
                     if ($response->successful()) {
                         $data = $response->json();
-                        if ($data['status'] === 'success') {
+                        if (($data['status'] ?? null) === 'success') {
                             $this->info("  ✓ Success - Mahasiswa: {$data['data']['nama']}, Status: {$data['data']['keterangan']}");
                         } else {
-                            $this->warn("  ⚠ API returned: " . $response->json('message'));
+                            $this->warn("  ⚠ API returned: " . ($response->json('message') ?? 'Unexpected response'));
                         }
                     } else {
                         $this->warn("  ⚠ Status: " . $response->status());

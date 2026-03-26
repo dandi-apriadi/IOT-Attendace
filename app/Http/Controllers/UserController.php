@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Services\AuditLogger;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -58,7 +60,18 @@ class UserController extends Controller
             return redirect()->route('users')->with('error', 'Anda tidak bisa menghapus diri sendiri.');
         }
 
+        $deletedUserName = $user->name;
+        $deletedUserEmail = $user->email;
+
         $user->delete();
+
+        AuditLogger::log(
+            request(),
+            'hapus_user',
+            'Menghapus user ' . $deletedUserName . ' (' . $deletedUserEmail . ')',
+            auth()->id()
+        );
+
         return redirect()->route('users')->with('success', 'User berhasil dihapus.');
     }
 

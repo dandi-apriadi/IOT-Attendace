@@ -19,6 +19,41 @@
     </div>
 </div>
 
+<!-- Charts Section -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 2rem; margin-bottom: 2rem;">
+    @if(auth()->user()?->role === 'admin')
+        <!-- Admin: Weekly Trends -->
+        <div class="glass-card">
+            <h3 class="display-font" style="margin-bottom: 1.5rem; font-size: 1.1rem;">Tren Kehadiran Mingguan</h3>
+            <div style="height: 300px;">
+                <canvas id="campusTrendsChart"></canvas>
+            </div>
+        </div>
+        <!-- Admin: IoT Health -->
+        <div class="glass-card">
+            <h3 class="display-font" style="margin-bottom: 1.5rem; font-size: 1.1rem;">Status Perangkat IoT</h3>
+            <div style="height: 300px; display: flex; justify-content: center;">
+                <canvas id="iotHealthChart"></canvas>
+            </div>
+        </div>
+    @else
+        <!-- Dosen: Class Participation -->
+        <div class="glass-card">
+            <h3 class="display-font" style="margin-bottom: 1.5rem; font-size: 1.1rem;">Partisipasi per Kelas</h3>
+            <div style="height: 300px;">
+                <canvas id="classParticipationChart"></canvas>
+            </div>
+        </div>
+        <!-- Dosen: Attendance Performance -->
+        <div class="glass-card">
+            <h3 class="display-font" style="margin-bottom: 1.5rem; font-size: 1.1rem;">Performa Kehadiran MK</h3>
+            <div style="height: 300px; display: flex; justify-content: center;">
+                <canvas id="coursePerformanceChart"></canvas>
+            </div>
+        </div>
+    @endif
+</div>
+
 <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 2rem;">
     <!-- Recent Activity Table -->
     <div class="glass-card">
@@ -76,3 +111,122 @@
     </div>
 </div>
 @endsection
+
+@push('scripts')
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const adminWeeklyChart = @json($adminWeeklyChart ?? ['labels' => [], 'data' => []]);
+    const adminIotChart = @json($adminIotChart ?? ['labels' => [], 'data' => []]);
+    const dosenClassChart = @json($dosenClassChart ?? ['labels' => [], 'data' => []]);
+    const dosenCourseChart = @json($dosenCourseChart ?? ['labels' => [], 'data' => []]);
+
+    const ctxTrends = document.getElementById('campusTrendsChart');
+    if (ctxTrends) {
+        new Chart(ctxTrends, {
+            type: 'line',
+            data: {
+                labels: adminWeeklyChart.labels,
+                datasets: [{
+                    label: 'Total Kehadiran',
+                    data: adminWeeklyChart.data,
+                    borderColor: '#1DB173',
+                    backgroundColor: 'rgba(29, 177, 115, 0.1)',
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 4,
+                    pointBackgroundColor: '#1DB173'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: { beginAtZero: true, grid: { display: false } },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+    }
+
+    const ctxIot = document.getElementById('iotHealthChart');
+    if (ctxIot) {
+        new Chart(ctxIot, {
+            type: 'doughnut',
+            data: {
+                labels: adminIotChart.labels,
+                datasets: [{
+                    data: adminIotChart.data,
+                    backgroundColor: ['#1DB173', '#BA1A1A', '#F59E0B'],
+                    borderWidth: 0,
+                    hoverOffset: 10
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom' }
+                },
+                cutout: '70%'
+            }
+        });
+    }
+
+    const ctxParticipation = document.getElementById('classParticipationChart');
+    if (ctxParticipation) {
+        new Chart(ctxParticipation, {
+            type: 'bar',
+            data: {
+                labels: dosenClassChart.labels,
+                datasets: [{
+                    label: '% Kehadiran',
+                    data: dosenClassChart.data,
+                    backgroundColor: 'rgba(0, 102, 204, 0.8)',
+                    borderRadius: 8
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: { beginAtZero: true, max: 100 },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+    }
+
+    const ctxCourse = document.getElementById('coursePerformanceChart');
+    if (ctxCourse) {
+        new Chart(ctxCourse, {
+            type: 'radar',
+            data: {
+                labels: dosenCourseChart.labels,
+                datasets: [{
+                    label: 'Performa Rata-rata',
+                    data: dosenCourseChart.data,
+                    borderColor: '#0066CC',
+                    backgroundColor: 'rgba(0, 102, 204, 0.2)',
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    r: { beginAtZero: true, max: 100 }
+                }
+            }
+        });
+    }
+});
+</script>
+@endpush

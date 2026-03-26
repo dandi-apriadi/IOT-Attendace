@@ -7,12 +7,12 @@
     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 2rem; margin-bottom: 2rem;">
         <div style="background: #E6F6EC; padding: 1.5rem; border-radius: 12px;">
             <div style="font-size: 0.8rem; color: #1DB173; font-weight: 700; text-transform: uppercase;">Hari Ini Total</div>
-            <div style="font-size: 2.5rem; font-weight: 800; color: #1DB173; margin: 0.5rem 0;">{{ $todayTotal }}</div>
+            <div id="today-total" style="font-size: 2.5rem; font-weight: 800; color: #1DB173; margin: 0.5rem 0;">{{ $todayTotal }}</div>
             <div style="font-size: 0.75rem; color: #6b7280;">Tap presensi</div>
         </div>
         <div style="background: #FEF3C7; padding: 1.5rem; border-radius: 12px;">
             <div style="font-size: 0.8rem; color: #F59E0B; font-weight: 700; text-transform: uppercase;">Jam Ini</div>
-            <div style="font-size: 2.5rem; font-weight: 800; color: #F59E0B; margin: 0.5rem 0;">{{ $thisHourTotal }}</div>
+            <div id="this-hour-total" style="font-size: 2.5rem; font-weight: 800; color: #F59E0B; margin: 0.5rem 0;">{{ $thisHourTotal }}</div>
             <div style="font-size: 0.75rem; color: #6b7280;">Tap dalam 1 jam terakhir</div>
         </div>
         <div style="background: #F0F5FF; padding: 1.5rem; border-radius: 12px;">
@@ -44,18 +44,19 @@
                 <th style="text-align: center; padding: 0.75rem; border-bottom: 2px solid #e5e7eb;">Status</th>
             </tr>
         </thead>
-        <tbody>
-            @forelse ($liveStream as $record)
+        <tbody id="live-stream-body">
+            @forelse ($records as $record)
                 <tr style="border-bottom: 1px solid #f3f4f6; animation: slideIn 0.3s ease-out;">
-                    <td style="padding: 0.75rem; font-weight: 600; color: #6b7280;">{{ $record->created_at->format('H:i:s') }}</td>
-                    <td style="padding: 0.75rem;">{{ $record->mahasiswa?->nama_mahasiswa ?? 'N/A' }}</td>
-                    <td style="padding: 0.75rem; font-family: monospace; color: #0066CC;">{{ $record->mahasiswa?->nim ?? 'N/A' }}</td>
-                    <td style="padding: 0.75rem; font-size: 0.8rem;">{{ $record->jadwal?->mataKuliah?->kode_mk ?? 'N/A' }} - {{ $record->jadwal?->hari ?? 'N/A' }}</td>
+                    <td style="padding: 0.75rem; font-weight: 600; color: #6b7280;">{{ $record['time'] }}</td>
+                    <td style="padding: 0.75rem;">{{ $record['name'] }}</td>
+                    <td style="padding: 0.75rem; font-family: monospace; color: #0066CC;">{{ $record['nim'] }}</td>
+                    <td style="padding: 0.75rem; font-size: 0.8rem;">{{ $record['schedule'] }}</td>
                     <td style="padding: 0.75rem; text-align: center;">
-                        <span style="display: inline-block; padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700;
-                            background: {{ $record->status === 'hadir' ? '#E6F6EC' : ($record->status === 'sakit_izin' ? '#FEF3C7' : '#FADBD8') }};
-                            color: {{ $record->status === 'hadir' ? '#1DB173' : ($record->status === 'sakit_izin' ? '#F59E0B' : '#BA1A1A') }};">
-                            {{ str_replace('_', ' ', ucfirst($record->status)) }}
+                        @php
+                            $statusBadge = \App\Support\StatusBadge::forAbsensi((string) ($record['status'] ?? ''));
+                        @endphp
+                        <span style="display: inline-block; padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; background: {{ $statusBadge['bg'] }}; color: {{ $statusBadge['text'] }};">
+                            {{ $record['status'] }}
                         </span>
                     </td>
                 </tr>
@@ -75,71 +76,73 @@
     </style>
 
     <div style="margin-top: 1rem; font-size: 0.8rem; color: #6b7280; text-align: center;">
-        <i class="fas fa-sync-alt"></i> Halaman auto-refresh setiap 3 detik
+        <i class="fas fa-sync-alt"></i> Live update setiap 10 detik | terakhir sinkron: <span id="last-updated-at">{{ $lastUpdatedAt }}</span>
     </div>
 </div>
 
 <script>
-    // Auto-refresh every 3 seconds
-    setTimeout(() => location.reload(), 3000);
+    const statusBadgeMap = @json(\App\Support\StatusBadge::absensiMap());
+
+    function escapeHtml(text) {
+        return String(text)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function statusColors(status) {
+        const value = String(status || '').toLowerCase();
+        const mapped = statusBadgeMap[value] || statusBadgeMap.default;
+        return { bg: mapped.bg, color: mapped.text };
+    }
+
+    async function refreshLiveStream() {
+        try {
+            const response = await fetch("{{ route('monitoring.live.data') }}", {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+
+            if (!response.ok) {
+                return;
+            }
+
+            const payload = await response.json();
+
+            document.getElementById('today-total').textContent = payload.today_total ?? 0;
+            document.getElementById('this-hour-total').textContent = payload.this_hour_total ?? 0;
+            document.getElementById('last-updated-at').textContent = payload.last_updated_at ?? '-';
+
+            const tbody = document.getElementById('live-stream-body');
+            const rows = (payload.records || []).map((record) => {
+                const colors = statusColors(record.status);
+
+                return `
+                    <tr style="border-bottom: 1px solid #f3f4f6; animation: slideIn 0.3s ease-out;">
+                        <td style="padding: 0.75rem; font-weight: 600; color: #6b7280;">${escapeHtml(record.time ?? '-')}</td>
+                        <td style="padding: 0.75rem;">${escapeHtml(record.name ?? 'N/A')}</td>
+                        <td style="padding: 0.75rem; font-family: monospace; color: #0066CC;">${escapeHtml(record.nim ?? 'N/A')}</td>
+                        <td style="padding: 0.75rem; font-size: 0.8rem;">${escapeHtml(record.schedule ?? 'N/A')}</td>
+                        <td style="padding: 0.75rem; text-align: center;">
+                            <span style="display: inline-block; padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; background: ${colors.bg}; color: ${colors.color};">
+                                ${escapeHtml(record.status ?? '-')}
+                            </span>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            tbody.innerHTML = rows.length
+                ? rows.join('')
+                : '<tr><td colspan="5" style="text-align: center; padding: 2rem; color: #6b7280;">Belum ada data</td></tr>';
+        } catch (error) {
+            // Keep silent in UI to avoid interrupting monitoring screen.
+        }
+    }
+
+    setInterval(refreshLiveStream, 10000);
 </script>
-@endsection
-
-<div class="glass-card" style="border-top: 4px solid var(--kinetic-yellow);">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
-        <div style="display: flex; align-items: center; gap: 1rem;">
-            <div style="width: 12px; height: 12px; background: #1DB173; border-radius: 50%; animation: pulse 2s infinite;"></div>
-            <h3 class="display-font">Log Presensi Terkini</h3>
-        </div>
-        <button class="btn-kinetic" style="background: #BA1A1A; color: #fff;"><i class="fas fa-stop"></i> Akhiri Sesi</button>
-    </div>
-
-    <table>
-        <thead>
-            <tr>
-                <th>Waktu</th>
-                <th>Mahasiswa</th>
-                <th>Metode</th>
-                <th>Status</th>
-                <th>Action</th>
-            </tr>
-        </thead>
-        <tbody id="presence-log">
-            @forelse ($liveStream as $item)
-                <tr>
-                    <td style="font-weight: 700; color: var(--primary-blue);">{{ $item->waktu_tap }}</td>
-                    <td style="display: flex; align-items: center; gap: 0.75rem;">
-                        <img src="https://ui-avatars.com/api/?name={{ urlencode($item->mahasiswa->nama ?? '-') }}&background=003366&color=fff&size=32" style="border-radius: 8px;">
-                        <div>
-                            <div style="font-weight: 700;">{{ $item->mahasiswa->nama ?? '-' }}</div>
-                            <div style="font-size: 0.75rem; color: var(--text-muted);">{{ $item->mahasiswa->nim ?? '-' }}</div>
-                        </div>
-                    </td>
-                    <td>
-                        <i class="fas fa-{{ ($item->metode_absensi === 'RFID' ? 'id-card' : ($item->metode_absensi === 'Fingerprint' ? 'fingerprint' : ($item->metode_absensi === 'Face' ? 'camera' : 'barcode'))) }}"></i> 
-                        {{ $item->metode_absensi }}
-                    </td>
-                    <td>
-                        <span class="status-pill {{ ($item->status ?? '') === 'Telat' ? 'status-late' : (($item->status ?? '') === 'Alpa' ? 'status-absent' : 'status-present') }}">
-                            {{ $item->status }}
-                        </span>
-                    </td>
-                    <td><button style="border: none; background: none; color: var(--text-muted); cursor: pointer;"><i class="fas fa-ellipsis-v"></i></button></td>
-                </tr>
-            @empty
-                <tr>
-                    <td colspan="5" style="text-align:center; padding: 2rem; color: #6b7280;">Belum ada aktivitas hari ini.</td>
-                </tr>
-            @endforelse
-        </tbody>
-    </table>
-</div>
-
-<style>
-@keyframes pulse {
-    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(29, 177, 115, 0.7); }
-    70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(29, 177, 115, 0); }
-    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(29, 177, 115, 0); }
-}
-</style>
 @endsection
