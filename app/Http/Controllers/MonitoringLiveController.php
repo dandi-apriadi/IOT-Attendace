@@ -3,21 +3,38 @@
 namespace App\Http\Controllers;
 
 use App\Models\Absensi;
+use App\Models\Kelas;
+use App\Models\MataKuliah;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\View\View;
+use Illuminate\Http\Request;
 
 class MonitoringLiveController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
         $payload = $this->buildLivePayload();
+        
+        $activeSession = null;
+        if ($request->has('mata_kuliah_id') && $request->has('kelas_id')) {
+            $mk = MataKuliah::find($request->mata_kuliah_id);
+            $kelas = Kelas::find($request->kelas_id);
+            if ($mk && $kelas) {
+                $activeSession = [
+                    'mk_name' => $mk->nama_mk,
+                    'mk_kode' => $mk->kode_mk,
+                    'kelas_name' => $kelas->nama_kelas,
+                ];
+            }
+        }
 
         return view('monitoring.live', [
             'records' => $payload['records'],
             'todayTotal' => $payload['today_total'],
             'thisHourTotal' => $payload['this_hour_total'],
             'lastUpdatedAt' => $payload['last_updated_at'],
+            'activeSession' => $activeSession,
         ]);
     }
 

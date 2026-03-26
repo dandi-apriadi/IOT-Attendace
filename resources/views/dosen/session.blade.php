@@ -36,17 +36,20 @@
                     <div style="font-size: 0.75rem; color: #BA1A1A; margin-top: 0.5rem;">⚠️ Belum ada data kelas di database</div>
                 @endif
             </div>
-        </form>
+            
+            <div style="grid-column: 1 / -1; margin-top: 1rem;">
+                <div style="background: rgba(0, 30, 64, 0.05); padding: 1.5rem; border-radius: var(--radius-xl); margin-bottom: 2rem; text-align: center;">
+                    <div style="display: flex; align-items: center; justify-content: center; gap: 1rem; margin-bottom: 1rem;">
+                        <i class="fas fa-database" style="color: #1DB173;"></i>
+                        <span style="font-weight: 700; font-size: 0.9rem;">Data Dari Database</span>
+                    </div>
+                    <p style="font-size: 0.8rem; opacity: 0.7;">Mata kuliah dan kelas dimuat dari database realtime. Pilih salah satu untuk memulai sesi presensi.</p>
+                </div>
 
-        <div style="background: rgba(0, 30, 64, 0.05); padding: 2rem; border-radius: var(--radius-xl); margin-bottom: 3rem;">
-            <div style="display: flex; align-items: center; justify-content: center; gap: 1rem; margin-bottom: 1rem;">
-                <i class="fas fa-database" style="color: #1DB173;"></i>
-                <span style="font-weight: 700; font-size: 0.9rem;">Data Dari Database</span>
+                <button type="submit" class="btn-kinetic" style="padding: 1.25rem 3rem; font-size: 1.1rem; width: 100%; border: none; cursor: pointer;">
+                    <i class="fas fa-bolt"></i> MULAI SESI SEKARANG
+                </button>
             </div>
-            <p style="font-size: 0.8rem; opacity: 0.7;">Mata kuliah dan kelas dimuat dari database realtime. Pilih salah satu untuk memulai sesi presensi.</p>
-        </div>
-
-        <button type="submit" class="btn-kinetic" style="padding: 1.25rem 3rem; font-size: 1.1rem; width: 100%; border: none; cursor: pointer;">MULAI SESI SEKARANG</button>
         </form>
     </div>
 </div>

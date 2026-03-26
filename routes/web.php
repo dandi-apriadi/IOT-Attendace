@@ -69,7 +69,15 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::put('/master/matakuliah/{id}', [MasterDataController::class, 'updateMataKuliah'])->name('matakuliah.update');
     Route::delete('/master/matakuliah/{id}', [MasterDataController::class, 'destroyMataKuliah'])->name('matakuliah.destroy');
     Route::get('/master/kelas', [MasterDataController::class, 'kelas'])->name('kelas');
+    Route::post('/master/kelas', [MasterDataController::class, 'storeKelas'])->name('kelas.store');
+    Route::get('/master/kelas/{id}/edit', [MasterDataController::class, 'editKelas'])->name('kelas.edit');
+    Route::put('/master/kelas/{id}', [MasterDataController::class, 'updateKelas'])->name('kelas.update');
+    Route::delete('/master/kelas/{id}', [MasterDataController::class, 'destroyKelas'])->name('kelas.destroy');
     Route::get('/master/jadwal', [MasterDataController::class, 'jadwal'])->name('jadwal');
+    Route::post('/master/jadwal', [MasterDataController::class, 'storeJadwal'])->name('jadwal.store');
+    Route::get('/master/jadwal/{id}/edit', [MasterDataController::class, 'editJadwal'])->name('jadwal.edit');
+    Route::put('/master/jadwal/{id}', [MasterDataController::class, 'updateJadwal'])->name('jadwal.update');
+    Route::delete('/master/jadwal/{id}', [MasterDataController::class, 'destroyJadwal'])->name('jadwal.destroy');
     Route::get('/master/users', [UserController::class, 'index'])->name('users');
     Route::get('/master/users/create', [UserController::class, 'create'])->name('users.create');
     Route::post('/master/users', [UserController::class, 'store'])->name('users.store');

@@ -2,7 +2,15 @@
 
 @section('content')
 <div class="glass-card">
-    <h3 class="display-font" style="margin-bottom: 2rem;">Live Attendance Stream</h3>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+        <h3 class="display-font" style="margin: 0;">Live Attendance Stream</h3>
+        @if (isset($activeSession))
+            <div style="background: var(--primary-dark); color: white; padding: 0.5rem 1rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700;">
+                <i class="fas fa-satellite-dish" style="color: var(--kinetic-yellow); margin-right: 0.5rem;"></i>
+                MONITORING: {{ $activeSession['mk_name'] }} ({{ $activeSession['mk_kode'] }}) - {{ $activeSession['kelas_name'] }}
+            </div>
+        @endif
+    </div>
 
     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 2rem; margin-bottom: 2rem;">
         <div style="background: #E6F6EC; padding: 1.5rem; border-radius: 12px;">
