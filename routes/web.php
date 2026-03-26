@@ -40,8 +40,15 @@ Route::middleware(['auth', 'role:admin,dosen'])->group(function () {
 
     // Operational
     Route::get('/dosen/session', [DosenSessionController::class, 'create'])->name('dosen-session');
+    Route::get('/dosen/session/detail', [DosenSessionController::class, 'detailByFilter'])->name('dosen-session.detail');
+    Route::get('/dosen/session/detail/export/excel', [DosenSessionController::class, 'exportExcel'])->name('dosen-session.detail.export.excel');
+    Route::get('/dosen/session/detail/export/pdf', [DosenSessionController::class, 'exportPdf'])->name('dosen-session.detail.export.pdf');
+    Route::post('/dosen/session/start', [DosenSessionController::class, 'store'])->name('dosen-session.start');
+    Route::delete('/dosen/session/stop', [DosenSessionController::class, 'destroy'])->name('dosen-session.stop');
     Route::get('/monitoring/live', [MonitoringLiveController::class, 'index'])->name('monitoring');
     Route::get('/monitoring/live/data', [MonitoringLiveController::class, 'data'])->name('monitoring.live.data');
+    Route::get('/monitoring/live/{absensi}/edit', [MonitoringLiveController::class, 'edit'])->name('monitoring.live.edit');
+    Route::put('/monitoring/live/{absensi}', [MonitoringLiveController::class, 'update'])->name('monitoring.live.update');
     Route::get('/monitoring/health', [MonitoringHealthController::class, 'index'])->name('iot-health');
     Route::get('/monitoring/performance/reports', [MonitoringPerformanceController::class, 'reports'])->name('monitoring.performance.reports');
     Route::get('/monitoring/performance/reports-view', [MonitoringViewController::class, 'performanceReports'])->name('monitoring.performance.view');

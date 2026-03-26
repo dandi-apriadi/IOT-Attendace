@@ -5,7 +5,7 @@
     <div class="glass-card">
         <div style="font-size: 0.8rem; color: var(--text-muted);">ONLINE DEVICES</div>
         <div style="font-size: 2.5rem; font-weight: 800; color: #1DB173;">{{ $onlineDevices }} <span style="font-size: 1rem; opacity: 0.5;">/ {{ $totalDevices }}</span></div>
-        <div style="font-size: 0.8rem; color: #6b7280; margin-top: 0.5rem;">Real-time dari tabel devices</div>
+        <div style="font-size: 0.8rem; color: #6b7280; margin-top: 0.5rem;">Aktif {{ $activeDevices }} · Stale {{ $staleDevices }}</div>
     </div>
     <div class="glass-card">
         <div style="font-size: 0.8rem; color: var(--text-muted);">AVG. LATENCY</div>
@@ -23,6 +23,12 @@
         <div style="font-size: 0.9rem; color: #6b7280; margin-top: 0.25rem;">P95 {{ number_format($latencyStats24h['p95_ms'] ?? 0, 2) }} ms</div>
         <div style="font-size: 0.8rem; color: #6b7280; margin-top: 0.4rem;">Latest {{ number_format($latencyStats24h['latest_ms'] ?? 0, 2) }} ms · Samples {{ number_format($latencyStats24h['sample_count'] ?? 0) }}</div>
     </div>
+    <div class="glass-card">
+        <div style="font-size: 0.8rem; color: var(--text-muted);">AUDIT EVENTS (24H)</div>
+        <div style="font-size: 1.15rem; font-weight: 700; margin-top: 0.35rem; color: #BA1A1A;">ERROR {{ number_format($eventsSummary24h['errors'] ?? 0) }}</div>
+        <div style="font-size: 0.9rem; color: #1DB173; margin-top: 0.25rem;">SUCCESS {{ number_format($eventsSummary24h['success'] ?? 0) }}</div>
+        <div style="font-size: 0.8rem; color: #6b7280; margin-top: 0.4rem;">Total {{ number_format($eventsSummary24h['total'] ?? 0) }} event</div>
+    </div>
 </div>
 
 <div class="glass-card">
@@ -33,9 +39,8 @@
                 <th>Device ID</th>
                 <th>Nama Device</th>
                 <th>Status</th>
-                <th>Aktif</th>
                 <th>Last Seen</th>
-                <th>Action</th>
+                <th>Update Time</th>
             </tr>
         </thead>
         <tbody>
@@ -43,22 +48,30 @@
                 <tr>
                     <td style="font-family: monospace; font-weight: 700;">{{ $device->device_id }}</td>
                     <td>{{ $device->name }}</td>
-                    <td><span class="status-pill" style="background: {{ $device->is_active ? '#E6F6EC' : '#FADBD8' }}; color: {{ $device->is_active ? '#1DB173' : '#BA1A1A' }};">
-                        {{ $device->is_active ? 'Online' : 'Offline' }}
+                    @php
+                        $bg = '#EEF0F3';
+                        $text = '#6b7280';
+
+                        if ($device->computed_status === 'online') {
+                            $bg = '#E6F6EC';
+                            $text = '#1DB173';
+                        } elseif ($device->computed_status === 'stale') {
+                            $bg = '#FEF3C7';
+                            $text = '#B45309';
+                        } elseif ($device->computed_status === 'disabled') {
+                            $bg = '#FADBD8';
+                            $text = '#BA1A1A';
+                        }
+                    @endphp
+                    <td><span class="status-pill" style="background: {{ $bg }}; color: {{ $text }};">
+                        {{ $device->computed_status_label }}
                     </span></td>
-                    <td>
-                        <input type="checkbox" {{ $device->is_active ? 'checked' : '' }} disabled style="cursor: not-allowed;">
-                    </td>
                     <td style="font-size: 0.85rem; color: #6b7280;">{{ $device->last_seen_at?->diffForHumans() ?? '-' }}</td>
-                    <td>
-                        <button class="btn-kinetic" style="padding: 0.5rem; background: {{ $device->is_active ? '#F1F3F5' : '#BA1A1A' }}; color: {{ $device->is_active ? '#000' : '#fff' }};">
-                            <i class="fas {{ $device->is_active ? 'fa-sync' : 'fa-power-off' }}"></i>
-                        </button>
-                    </td>
+                    <td style="font-size: 0.85rem; color: #6b7280;">{{ $device->updated_at?->format('d M Y H:i:s') ?? '-' }}</td>
                 </tr>
             @empty
                 <tr>
-                    <td colspan="6" style="text-align: center; color: #6b7280; padding: 2rem;">Belum ada device yang terdaftar</td>
+                    <td colspan="5" style="text-align: center; color: #6b7280; padding: 2rem;">Belum ada device yang terdaftar</td>
                 </tr>
             @endforelse
         </tbody>
@@ -78,6 +91,9 @@
                 [{{ $time }}]
                 <span style="color: {{ $levelColor }};">{{ $level }}</span>:
                 {{ $event->description ?? $event->action }}
+                @if ($event->user)
+                    <span style="color: #7f848e;">(user: {{ $event->user->name }})</span>
+                @endif
             </div>
         @empty
             <div style="color: #abb2bf;">Belum ada event audit di database.</div>

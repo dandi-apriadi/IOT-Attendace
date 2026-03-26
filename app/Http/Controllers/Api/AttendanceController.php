@@ -10,6 +10,7 @@ use App\Models\PerformanceMetric;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 use Carbon\Carbon;
 use Throwable;
 
@@ -52,17 +53,33 @@ class AttendanceController extends Controller
             return response()->json(['message' => 'Mahasiswa tidak terdaftar'], 404);
         }
 
-        // 2. Find Active Schedule for this student's class
-        $jadwal = Jadwal::where('kelas_id', $mahasiswa->kelas_id)
-            ->where('hari', $now->isoFormat('dddd')) // Logic might need adjustment for local lang
-            ->where('jam_mulai', '<=', $time)
-            ->where('jam_selesai', '>=', $time)
-            ->first();
+        // 2. Determine Active Schedule (PRIORITY: Manual Cache > Automatic Schedule)
+        $jadwal = null;
+        $manualSession = Cache::get('active_attendance_session');
+
+        if ($manualSession) {
+            // Find a schedule for this course/class/dosen if available, 
+            // or just use ANY valid schedule segment that matches the manual criteria.
+            // For the sake of data integrity, we should find/create a 'Jadwal' or just use the IDs.
+            // Usually, there is a Jadwal record for every MK/Kelas/Dosen combo.
+            $jadwal = Jadwal::where('mata_kuliah_id', $manualSession['mata_kuliah_id'])
+                ->where('kelas_id', $manualSession['kelas_id'])
+                ->first();
+        }
+
+        if (!$jadwal) {
+            $dayName = $this->getIndoDayName($now);
+            $jadwal = Jadwal::where('kelas_id', $mahasiswa->kelas_id)
+                ->where('hari', $dayName)
+                ->where('jam_mulai', '<=', $time)
+                ->where('jam_selesai', '>=', $time)
+                ->first();
+        }
 
         if (!$jadwal) {
             $queryDurationMs = (microtime(true) - $queryStartedAt) * 1000;
             $this->recordApiPerformanceMetric($queryDurationMs, $requestStartedAt, $resultCount, $request);
-            return response()->json(['message' => 'Tidak ada jadwal aktif saat ini'], 400);
+            return response()->json(['message' => 'Tidak ada jadwal/sesi aktif saat ini'], 400);
         }
 
         // 3. Mark Attendance with transaction and lock to reduce race conditions.
@@ -139,5 +156,19 @@ class AttendanceController extends Controller
             return 'Telat';
         }
         return 'Hadir';
+    }
+
+    private function getIndoDayName($date): string
+    {
+        return match ($date->dayOfWeekIso) {
+            1 => 'Senin',
+            2 => 'Selasa',
+            3 => 'Rabu',
+            4 => 'Kamis',
+            5 => 'Jumat',
+            6 => 'Sabtu',
+            7 => 'Minggu',
+            default => $date->format('l'),
+        };
     }
 }

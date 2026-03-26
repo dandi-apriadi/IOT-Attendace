@@ -12,14 +12,38 @@ class MonitoringHealthController extends Controller
 {
     public function index(): View
     {
-        $today = now()->toDateString();
+        $now = now();
+        $today = $now->toDateString();
+        $onlineThreshold = $now->copy()->subMinutes(5);
 
         $devices = Device::query()
             ->orderByDesc('is_active')
             ->orderByDesc('last_seen_at')
-            ->get();
+            ->get()
+            ->map(function (Device $device) use ($onlineThreshold): Device {
+                $status = 'unknown';
+                $statusLabel = 'Unknown';
 
-        $onlineDevices = $devices->where('is_active', true)->count();
+                if (! $device->is_active) {
+                    $status = 'disabled';
+                    $statusLabel = 'Disabled';
+                } elseif ($device->last_seen_at && $device->last_seen_at->gte($onlineThreshold)) {
+                    $status = 'online';
+                    $statusLabel = 'Online';
+                } elseif ($device->last_seen_at) {
+                    $status = 'stale';
+                    $statusLabel = 'Stale';
+                }
+
+                $device->computed_status = $status;
+                $device->computed_status_label = $statusLabel;
+
+                return $device;
+            });
+
+        $onlineDevices = $devices->where('computed_status', 'online')->count();
+        $activeDevices = $devices->where('is_active', true)->count();
+        $staleDevices = $devices->where('computed_status', 'stale')->count();
         $totalDevices = $devices->count();
 
         $avgLatency = (float) (PerformanceMetric::query()
@@ -65,18 +89,44 @@ class MonitoringHealthController extends Controller
             ? round((float) (($latencyRows->first()->total_duration_ms ?? 0) ?: ($latencyRows->first()->query_duration_ms ?? 0)), 2)
             : 0.0;
 
+        $audit24h = AuditLog::query()
+            ->where('created_at', '>=', $now->copy()->subDay());
+
+        $errorEvents24h = (clone $audit24h)
+            ->where(function ($query) {
+                $query->where('action', 'like', '%failed%')
+                    ->orWhere('description', 'like', '%failed%')
+                    ->orWhere('description', 'like', '%error%');
+            })
+            ->count();
+
+        $successEvents24h = (clone $audit24h)
+            ->where(function ($query) {
+                $query->where('action', 'like', '%success%')
+                    ->orWhere('action', 'login');
+            })
+            ->count();
+
         $recentEvents = AuditLog::query()
+            ->with('user:id,name')
             ->latest('created_at')
             ->limit(4)
             ->get();
 
         return view('monitoring.health', [
             'onlineDevices' => $onlineDevices,
+            'activeDevices' => $activeDevices,
+            'staleDevices' => $staleDevices,
             'totalDevices' => $totalDevices,
             'avgLatency' => round($avgLatency, 2),
             'todaysPayloads' => $todaysPayloads,
             'devices' => $devices,
             'recentEvents' => $recentEvents,
+            'eventsSummary24h' => [
+                'errors' => $errorEvents24h,
+                'success' => $successEvents24h,
+                'total' => (clone $audit24h)->count(),
+            ],
             'latencyStats24h' => [
                 'sample_count' => $latencyCount,
                 'avg_ms' => $avgLatency24h,
