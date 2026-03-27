@@ -33,7 +33,7 @@
                     </form>
                 </div>
                 <div style="display:flex; justify-content:flex-end; margin-top: 1rem;">
-                    <a href="{{ route('dosen-session.detail') }}" class="btn-kinetic" style="text-decoration:none; padding: 0.65rem 1rem; font-size: 0.82rem;">
+                    <a href="{{ route('dosen-session.detail', ['mata_kuliah_id' => $activeSession['mata_kuliah_id'], 'kelas_id' => $activeSession['kelas_id']]) }}" class="btn-kinetic" style="text-decoration:none; padding: 0.65rem 1rem; font-size: 0.82rem;">
                         <i class="fas fa-list-check"></i> DETAIL SESI
                     </a>
                 </div>

@@ -2,10 +2,9 @@
 <html lang="id">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Detail Sesi - {{ $mataKuliah->kode_mk }} - {{ $selectedDate }}</title>
     <style>
-        body { font-family: Arial, Helvetica, sans-serif; color: #111827; margin: 20px; }
+        body { font-family: DejaVu Sans, Arial, Helvetica, sans-serif; color: #111827; margin: 20px; }
         .meta { margin-bottom: 14px; font-size: 13px; color: #4b5563; }
         .cards { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-bottom: 14px; }
         .card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px; }
@@ -15,13 +14,9 @@
         th, td { border: 1px solid #e5e7eb; padding: 7px; }
         th { background: #f9fafb; text-align: left; }
         .center { text-align: center; }
-        @media print { .no-print { display: none; } body { margin: 10px; } }
     </style>
 </head>
 <body>
-    <div class="no-print" style="margin-bottom: 12px;">
-        <button onclick="window.print()" style="padding: 8px 12px; border: 0; border-radius: 8px; background: #0066CC; color: white; cursor: pointer;">Cetak / Simpan PDF</button>
-    </div>
 
     <h2 style="margin: 0 0 6px;">Detail Sesi Manual</h2>
     <div class="meta">

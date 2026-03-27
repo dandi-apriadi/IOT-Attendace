@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use Barryvdh\DomPDF\Facade\Pdf;
 use App\Models\Absensi;
 use App\Models\Jadwal;
 use App\Models\Kelas;
@@ -12,6 +13,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class DosenSessionController extends Controller
@@ -71,14 +73,19 @@ class DosenSessionController extends Controller
     public function detailByFilter(Request $request): View|RedirectResponse
     {
         $selectedDate = $this->normalizeDate((string) $request->query('date', ''));
+        $mataKuliahId = $request->query('mata_kuliah_id');
+        $kelasId = $request->query('kelas_id');
 
-        return $this->detailByDate($selectedDate);
+        return $this->detailByDate($selectedDate, $mataKuliahId, $kelasId);
     }
 
     public function exportExcel(Request $request): StreamedResponse|RedirectResponse
     {
         $selectedDate = $this->normalizeDate((string) $request->query('date', ''));
-        $detailData = $this->buildDetailData($selectedDate);
+        $mataKuliahId = $request->query('mata_kuliah_id');
+        $kelasId = $request->query('kelas_id');
+        
+        $detailData = $this->buildDetailData($selectedDate, $mataKuliahId, $kelasId);
 
         if (isset($detailData['redirect'])) {
             return $detailData['redirect'];
@@ -89,6 +96,9 @@ class DosenSessionController extends Controller
 
         return response()->streamDownload(function () use ($detailData): void {
             $handle = fopen('php://output', 'w');
+
+            // Add UTF-8 BOM for Excel compatibility
+            fprintf($handle, chr(0xEF).chr(0xBB).chr(0xBF));
 
             fputcsv($handle, ['Tanggal', $detailData['selectedDate']]);
             fputcsv($handle, ['Mata Kuliah', $detailData['mataKuliah']->nama_mk . ' (' . $detailData['mataKuliah']->kode_mk . ')']);
@@ -109,24 +119,34 @@ class DosenSessionController extends Controller
             fclose($handle);
         }, $filename, [
             'Content-Type' => 'text/csv; charset=UTF-8',
+            'Pragma' => 'no-cache',
+            'Expires' => '0',
         ]);
     }
 
-    public function exportPdf(Request $request): View|RedirectResponse
+    public function exportPdf(Request $request): Response|RedirectResponse
     {
         $selectedDate = $this->normalizeDate((string) $request->query('date', ''));
-        $detailData = $this->buildDetailData($selectedDate);
+        $mataKuliahId = $request->query('mata_kuliah_id');
+        $kelasId = $request->query('kelas_id');
+
+        $detailData = $this->buildDetailData($selectedDate, $mataKuliahId, $kelasId);
 
         if (isset($detailData['redirect'])) {
             return $detailData['redirect'];
         }
 
-        return view('dosen.session-detail-pdf', $detailData);
+        $fileDate = str_replace('-', '', $selectedDate);
+        $filename = "detail_sesi_{$fileDate}.pdf";
+
+        return Pdf::loadView('dosen.session-detail-pdf', $detailData)
+            ->setPaper('a4', 'portrait')
+            ->download($filename);
     }
 
-    private function detailByDate(string $selectedDate): View|RedirectResponse
+    private function detailByDate(string $selectedDate, $mataKuliahId = null, $kelasId = null): View|RedirectResponse
     {
-        $detailData = $this->buildDetailData($selectedDate);
+        $detailData = $this->buildDetailData($selectedDate, $mataKuliahId, $kelasId);
 
         if (isset($detailData['redirect'])) {
             return $detailData['redirect'];
@@ -135,22 +155,26 @@ class DosenSessionController extends Controller
         return view('dosen.session-detail', $detailData);
     }
 
-    private function buildDetailData(string $selectedDate): array
+    private function buildDetailData(string $selectedDate, $mataKuliahId = null, $kelasId = null): array
     {
         $activeSession = Cache::get('active_attendance_session');
 
-        if (! $activeSession) {
+        // Prioritize parameters, fallback to cache
+        $finalMkId = $mataKuliahId ?? ($activeSession['mata_kuliah_id'] ?? null);
+        $finalKelasId = $kelasId ?? ($activeSession['kelas_id'] ?? null);
+
+        if (! $finalMkId || ! $finalKelasId) {
             return [
-                'redirect' => redirect()->route('dosen-session')->with('error', 'Belum ada sesi manual yang aktif.'),
+                'redirect' => redirect()->route('dosen-session')->with('error', 'Silakan pilih mata kuliah dan kelas terlebih dahulu atau aktifkan sesi.'),
             ];
         }
 
-        $mataKuliah = MataKuliah::find($activeSession['mata_kuliah_id'] ?? null);
-        $kelas = Kelas::find($activeSession['kelas_id'] ?? null);
+        $mataKuliah = MataKuliah::find($finalMkId);
+        $kelas = Kelas::find($finalKelasId);
 
         if (! $mataKuliah || ! $kelas) {
             return [
-                'redirect' => redirect()->route('dosen-session')->with('error', 'Data sesi tidak valid. Silakan aktifkan ulang sesi manual.'),
+                'redirect' => redirect()->route('dosen-session')->with('error', 'Data mata kuliah atau kelas tidak ditemukan.'),
             ];
         }
 

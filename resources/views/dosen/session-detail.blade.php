@@ -11,10 +11,10 @@
                 </div>
             </div>
             <div style="display:flex; gap:0.45rem; flex-wrap:wrap;">
-                <a href="{{ route('dosen-session.detail.export.excel', ['date' => $selectedDate]) }}" class="btn-kinetic" style="text-decoration:none; padding:0.6rem 0.9rem; font-size:0.82rem;">
+                <a href="{{ route('dosen-session.detail.export.excel', ['date' => $selectedDate, 'mata_kuliah_id' => $mataKuliah->id, 'kelas_id' => $kelas->id]) }}" class="btn-kinetic" style="text-decoration:none; padding:0.6rem 0.9rem; font-size:0.82rem;">
                     Export Excel
                 </a>
-                <a href="{{ route('dosen-session.detail.export.pdf', ['date' => $selectedDate]) }}" target="_blank" class="btn-kinetic" style="text-decoration:none; padding:0.6rem 0.9rem; font-size:0.82rem; background:#0066CC;">
+                <a href="{{ route('dosen-session.detail.export.pdf', ['date' => $selectedDate, 'mata_kuliah_id' => $mataKuliah->id, 'kelas_id' => $kelas->id]) }}" target="_blank" class="btn-kinetic" style="text-decoration:none; padding:0.6rem 0.9rem; font-size:0.82rem; background:#0066CC;">
                     Export PDF
                 </a>
                 <a href="{{ route('dosen-session') }}" class="btn-kinetic" style="text-decoration:none; padding:0.6rem 0.9rem; font-size:0.82rem; background:#374151;">
@@ -24,6 +24,8 @@
         </div>
 
         <form method="GET" action="{{ route('dosen-session.detail') }}" style="display:grid; grid-template-columns: 1fr auto; gap:0.6rem; margin-top: 1rem; max-width: 420px;">
+            <input type="hidden" name="mata_kuliah_id" value="{{ $mataKuliah->id }}" />
+            <input type="hidden" name="kelas_id" value="{{ $kelas->id }}" />
             <input type="date" name="date" value="{{ $selectedDate }}" style="padding:0.62rem 0.72rem; border:1px solid #e5e7eb; border-radius:10px;" />
             <button type="submit" class="btn-kinetic" style="border:none; padding:0.62rem 0.82rem;">Terapkan</button>
         </form>
