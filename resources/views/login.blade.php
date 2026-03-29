@@ -59,6 +59,8 @@
         }
         .form-control:focus {
             outline: 2px solid var(--kinetic-yellow);
+            background: #fff;
+            color: var(--text-primary);
         }
         .login-btn {
             width: 100%;
