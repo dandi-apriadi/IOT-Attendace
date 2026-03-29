@@ -78,7 +78,7 @@ class ReportsController extends Controller
             ->orderBy('m.nama');
 
         if ($kelasId !== '') {
-            $query->where('m.kelas_id', $kelasId);
+            $query->where('j.kelas_id', $kelasId);
         }
 
         if ($mataKuliahId !== '') {

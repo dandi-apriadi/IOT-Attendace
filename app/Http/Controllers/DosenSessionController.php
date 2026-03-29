@@ -13,6 +13,8 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\View\View;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -92,33 +94,45 @@ class DosenSessionController extends Controller
         }
 
         $fileDate = str_replace('-', '', $selectedDate);
-        $filename = "detail_sesi_{$fileDate}.csv";
+        $filename = "detail_sesi_{$fileDate}.xlsx";
 
         return response()->streamDownload(function () use ($detailData): void {
-            $handle = fopen('php://output', 'w');
+            $spreadsheet = new Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
 
-            // Add UTF-8 BOM for Excel compatibility
-            fprintf($handle, chr(0xEF).chr(0xBB).chr(0xBF));
+            $sheet->setCellValue('A1', 'Tanggal');
+            $sheet->setCellValue('B1', $detailData['selectedDate']);
+            $sheet->setCellValue('A2', 'Mata Kuliah');
+            $sheet->setCellValue('B2', $detailData['mataKuliah']->nama_mk . ' (' . $detailData['mataKuliah']->kode_mk . ')');
+            $sheet->setCellValue('A3', 'Kelas');
+            $sheet->setCellValue('B3', $detailData['kelas']->nama_kelas);
 
-            fputcsv($handle, ['Tanggal', $detailData['selectedDate']]);
-            fputcsv($handle, ['Mata Kuliah', $detailData['mataKuliah']->nama_mk . ' (' . $detailData['mataKuliah']->kode_mk . ')']);
-            fputcsv($handle, ['Kelas', $detailData['kelas']->nama_kelas]);
-            fputcsv($handle, []);
-            fputcsv($handle, ['NIM', 'Nama', 'Status', 'Metode', 'Waktu Tap']);
+            $headerRow = 5;
+            $sheet->fromArray(['NIM', 'Nama', 'Status', 'Metode', 'Waktu Tap'], null, "A{$headerRow}");
 
+            $rowIndex = $headerRow + 1;
             foreach ($detailData['studentRows'] as $row) {
-                fputcsv($handle, [
+                $sheet->fromArray([
                     $row['nim'],
                     $row['nama'],
                     $row['status'] === 'Pending' ? 'Belum Absensi' : $row['status'],
                     $row['metode'],
                     $row['waktu_tap'],
-                ]);
+                ], null, "A{$rowIndex}");
+
+                $rowIndex++;
             }
 
-            fclose($handle);
+            foreach (['A', 'B', 'C', 'D', 'E'] as $column) {
+                $sheet->getColumnDimension($column)->setAutoSize(true);
+            }
+
+            $writer = new Xlsx($spreadsheet);
+            $writer->save('php://output');
+            $spreadsheet->disconnectWorksheets();
+            unset($spreadsheet);
         }, $filename, [
-            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             'Pragma' => 'no-cache',
             'Expires' => '0',
         ]);

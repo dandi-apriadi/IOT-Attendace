@@ -2,11 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Device;
+use App\Models\DeviceEnrollmentJob;
 use App\Models\Kelas;
 use App\Models\Mahasiswa;
 use App\Services\AuditLogger;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -56,9 +60,130 @@ class MahasiswaController extends Controller
 
     public function edit(Mahasiswa $mahasiswa): View
     {
+        $onlineThreshold = now()->subMinutes(2);
+
         return view('master.mahasiswa-edit', [
             'mahasiswa' => $mahasiswa,
             'kelasList' => Kelas::orderBy('nama_kelas')->get(),
+            'activeDevices' => Device::query()
+                ->where('is_active', true)
+                ->whereNotNull('last_seen_at')
+                ->where('last_seen_at', '>=', $onlineThreshold)
+                ->orderBy('name')
+                ->get(['id', 'device_id', 'name', 'last_seen_at']),
+        ]);
+    }
+
+    public function startEnrollment(Request $request, Mahasiswa $mahasiswa): JsonResponse
+    {
+        $data = $request->validate([
+            'device_id' => ['required', 'integer', 'exists:devices,id'],
+            'capture_type' => ['required', Rule::in(['rfid', 'fingerprint', 'face', 'barcode'])],
+        ]);
+
+        $device = Device::query()
+            ->where('id', $data['device_id'])
+            ->where('is_active', true)
+            ->first();
+
+        if (! $device) {
+            return response()->json([
+                'message' => 'Perangkat IoT tidak aktif atau tidak ditemukan.',
+            ], 422);
+        }
+
+        DB::transaction(function () use ($mahasiswa, $data): void {
+            DeviceEnrollmentJob::query()
+                ->where('mahasiswa_id', $mahasiswa->id)
+                ->where('capture_type', $data['capture_type'])
+                ->whereIn('status', ['pending_device', 'capturing'])
+                ->update([
+                    'status' => 'cancelled',
+                    'error_message' => 'Dibatalkan karena ada request sinkronisasi baru.',
+                    'completed_at' => now(),
+                ]);
+        });
+
+        $job = DeviceEnrollmentJob::create([
+            'mahasiswa_id' => $mahasiswa->id,
+            'device_id' => $device->id,
+            'capture_type' => $data['capture_type'],
+            'status' => 'pending_device',
+            'requested_by' => $request->user()?->id,
+            'expires_at' => now()->addSeconds(90),
+        ]);
+
+        AuditLogger::log(
+            $request,
+            'start_enrollment',
+            'Memulai sinkronisasi ' . $data['capture_type'] . ' untuk mahasiswa ' . $mahasiswa->nama . ' via perangkat ' . $device->device_id,
+            $request->user()?->id
+        );
+
+        return response()->json([
+            'message' => 'Sinkronisasi dimulai. Perangkat masuk mode standby.',
+            'job_id' => $job->id,
+            'status_url' => route('mahasiswa.enrollment.status', [$mahasiswa, $job]),
+        ]);
+    }
+
+    public function enrollmentStatus(Mahasiswa $mahasiswa, DeviceEnrollmentJob $job): JsonResponse
+    {
+        if ((int) $job->mahasiswa_id !== (int) $mahasiswa->id) {
+            abort(404);
+        }
+
+        if (
+            in_array($job->status, ['pending_device', 'capturing'], true)
+            && $job->expires_at
+            && now()->greaterThan($job->expires_at)
+        ) {
+            $job->forceFill([
+                'status' => 'expired',
+                'error_message' => 'Waktu sinkronisasi habis. Silakan ulangi proses registrasi.',
+                'completed_at' => now(),
+            ])->save();
+        }
+
+        return response()->json([
+            'job_id' => $job->id,
+            'status' => $job->status,
+            'capture_type' => $job->capture_type,
+            'captured_value' => $job->captured_value,
+            'error_message' => $job->error_message,
+            'updated_at' => optional($job->updated_at)?->toDateTimeString(),
+        ]);
+    }
+
+    public function cancelEnrollment(Request $request, Mahasiswa $mahasiswa, DeviceEnrollmentJob $job): JsonResponse
+    {
+        if ((int) $job->mahasiswa_id !== (int) $mahasiswa->id) {
+            abort(404);
+        }
+
+        if (in_array($job->status, ['completed', 'failed', 'cancelled', 'expired'], true)) {
+            return response()->json([
+                'message' => 'Job sudah selesai dan tidak bisa dibatalkan.',
+                'status' => $job->status,
+            ], 422);
+        }
+
+        $job->forceFill([
+            'status' => 'cancelled',
+            'error_message' => 'Dibatalkan oleh admin.',
+            'completed_at' => now(),
+        ])->save();
+
+        AuditLogger::log(
+            $request,
+            'cancel_enrollment',
+            'Membatalkan sinkronisasi ' . $job->capture_type . ' untuk mahasiswa ' . $mahasiswa->nama,
+            $request->user()?->id
+        );
+
+        return response()->json([
+            'message' => 'Sinkronisasi dibatalkan.',
+            'status' => 'cancelled',
         ]);
     }
 
