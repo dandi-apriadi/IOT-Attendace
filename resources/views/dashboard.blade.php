@@ -1,5 +1,10 @@
 @extends('layouts.app')
 
+@section('title', 'Dashboard Overview')
+@section('breadcrumb')
+    <span>Dashboard</span>
+@endsection
+
 @section('content')
 <div class="stats-grid">
     <div class="glass-card" style="border-left: 4px solid var(--kinetic-yellow);">

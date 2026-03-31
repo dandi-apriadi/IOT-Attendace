@@ -1,9 +1,16 @@
 @extends('layouts.app')
 
+@section('title', 'Manajemen Pengguna')
+@section('breadcrumb')
+    <span>Master Data</span>
+    <span class="breadcrumb-sep">/</span>
+    <span>Pengguna</span>
+@endsection
+
 @section('content')
 <div class="glass-card">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
-        <h3 class="display-font">Manajemen Pengguna (Admin & Dosen)</h3>
+        <h3 class="display-font" style="font-size: 1.1rem; color: var(--primary-blue-container);">Admin & Dosen Terdaftar</h3>
         <a href="{{ route('users.create') }}" class="btn-kinetic" style="text-decoration: none; padding: 0.75rem 1.5rem; font-size: 0.9rem; cursor: pointer;">+ Tambah User</a>
     </div>
 
@@ -71,7 +78,7 @@
         </tbody>
     </table>
 
-    <div style="margin-top: 2rem;">
+    <div class="pagination-container">
         {{ $users->links() }}
     </div>
 </div>

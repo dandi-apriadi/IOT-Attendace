@@ -1,5 +1,12 @@
 @extends('layouts.app')
 
+@section('title', 'IoT Status & Health')
+@section('breadcrumb')
+    <span>Operational</span>
+    <span class="breadcrumb-sep">/</span>
+    <span>IoT Status</span>
+@endsection
+
 @section('content')
 <div class="stats-grid">
     <div class="glass-card">

@@ -1,5 +1,12 @@
 @extends('layouts.app')
 
+@section('title', 'Live Monitoring Kehadiran')
+@section('breadcrumb')
+    <span>Operational</span>
+    <span class="breadcrumb-sep">/</span>
+    <span>Live Monitoring</span>
+@endsection
+
 @section('content')
 <div class="glass-card">
     @if (session('success'))

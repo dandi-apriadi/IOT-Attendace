@@ -1,8 +1,17 @@
 @extends('layouts.app')
 
+@section('title', 'Audit Log Sistem')
+@section('breadcrumb')
+    <span>Admin & Reports</span>
+    <span class="breadcrumb-sep">/</span>
+    <span>Audit Log</span>
+@endsection
+
 @section('content')
 <div class="glass-card">
-    <h3 class="display-font" style="margin-bottom: 2rem;">Audit Log Events</h3>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+        <h3 class="display-font" style="font-size: 1.1rem; color: var(--primary-blue-container);">Riwayat Aktivitas</h3>
+    </div>
 
     <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 2rem;">
         <div style="background: #E6F6EC; padding: 1rem; border-radius: 12px; text-align: center;">
@@ -51,7 +60,7 @@
         @endforelse
     </div>
 
-    <div style="margin-top: 1rem;">
+    <div class="pagination-container">
         {{ $logs->links() }}
     </div>
 

@@ -1,9 +1,16 @@
 @extends('layouts.app')
 
+@section('title', 'Jadwal Perkuliahan')
+@section('breadcrumb')
+    <span>Master Data</span>
+    <span class="breadcrumb-sep">/</span>
+    <span>Jadwal</span>
+@endsection
+
 @section('content')
 <div class="glass-card">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
-        <h3 class="display-font">Jadwal Perkuliahan</h3>
+        <h3 class="display-font" style="font-size: 1.1rem; color: var(--primary-blue-container);">Management Jadwal</h3>
         <span style="font-size:0.85rem; color:#6b7280;">Total {{ number_format($jadwalList->total()) }} jadwal</span>
     </div>
     

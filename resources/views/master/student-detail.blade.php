@@ -1,13 +1,19 @@
 @extends('layouts.app')
 
+@section('title', 'Detail Mahasiswa: ' . $mahasiswa->nama)
+@section('breadcrumb')
+    <span>Master Data</span>
+    <span class="breadcrumb-sep">/</span>
+    <span>Mahasiswa</span>
+    <span class="breadcrumb-sep">/</span>
+    <span>Detail</span>
+@endsection
+
 @section('content')
-<div class="glass-card">
+<div class="glass-card" style="margin-bottom: 2rem;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
-        <div>
-            <h3 class="display-font">Profil Mahasiswa</h3>
-            <div style="font-size: 0.85rem; color: #6b7280; margin-top: 0.5rem;">{{ $mahasiswa->kelas?->nama_kelas ?? 'N/A' }} - {{ $mahasiswa->nim }}</div>
-        </div>
-        <a href="{{ route('mahasiswa') }}" class="btn-secondary" style="text-decoration: none; padding: 0.75rem 1.5rem;">← Kembali</a>
+        <h3 class="display-font" style="font-size: 1.1rem; color: var(--primary-blue-container);">Informasi Profil</h3>
+        <a href="{{ route('mahasiswa') }}" class="btn-secondary" style="text-decoration: none; padding: 0.5rem 1rem; font-size: 0.8rem;"><i class="fas fa-arrow-left"></i> Kembali</a>
     </div>
 
     <!-- Student Info Card -->
@@ -96,7 +102,7 @@
     </table>
 
     <!-- Pagination -->
-    <div style="margin-top: 2rem;">
+    <div class="pagination-container">
         {{ $absensiHistory->links() }}
     </div>
 </div>

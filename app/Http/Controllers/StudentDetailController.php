@@ -22,7 +22,7 @@ class StudentDetailController extends Controller
 
         // Get attendance history
         $absensiHistory = $mahasiswa->absensi()
-            ->with('jadwal.mataKuliah')
+            ->with('jadwal.mata_kuliah')
             ->orderByDesc('created_at')
             ->paginate(20);
 

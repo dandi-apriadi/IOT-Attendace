@@ -128,10 +128,60 @@ h1, h2, h3, .display-font {
 }
 
 header {
+    background: var(--primary-blue);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 1rem 3rem;
+    position: sticky;
+    top: 0;
+    z-index: 90;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 3rem;
+    margin: -2rem -3rem 3rem -3rem;
+}
+
+.header-left h1 {
+    font-size: 1.25rem;
+    color: #FFFFFF;
+    margin-bottom: 0.15rem;
+}
+
+.header-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.5);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.breadcrumb-sep {
+    opacity: 0.3;
+}
+
+.nav-link.active {
+    background: rgba(252, 212, 0, 0.1);
+    color: #FFFFFF;
+    border-left: 4px solid var(--kinetic-yellow);
+    box-shadow: inset 4px 0 15px rgba(252, 212, 0, 0.05);
+}
+
+.user-badge {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.5rem;
+    padding-left: 1rem;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: all 0.3s ease;
+}
+
+.user-badge:hover {
+    background: rgba(255, 255, 255, 0.14);
 }
 
 /* Cards & Glassmorphism */
@@ -274,40 +324,76 @@ tr:nth-child(even) td {
 .status-late { background: #FFF4E6; color: #705D00; }
 .status-absent { background: #FDECEC; color: #BA1A1A; }
 
-/* Pagination Styling */
+/* Pagination Styling - Robust Fix for Laravel Defaults */
 .pagination-container {
     margin-top: 2rem;
-    display: flex;
-    justify-content: flex-start;
-    align-items: center;
-    gap: 0.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #eee;
 }
 
 .pagination-container nav {
-    width: 100%;
+    display: flex;
+    flex-direction: column;
 }
 
+/* Constrain the massive SVGs */
 .pagination-container svg {
-    width: 1.25rem;
-    height: 1.25rem;
+    width: 1.25rem !important;
+    height: 1.25rem !important;
     display: inline-block;
-    vertical-align: middle;
 }
 
-/* Fix for massive SVG icons in Laravel default pagination */
-nav[role="navigation"] div.flex-1 {
-    display: none;
+/* Handle the flex layouts in Laravel's default view */
+.pagination-container [role="navigation"] > div:first-child {
+    display: none; /* Hide the mobile view which often duplicates buttons */
 }
 
-nav[role="navigation"] div.hidden.sm\:flex-1 {
+.pagination-container [role="navigation"] > div:last-child {
     display: flex;
     justify-content: space-between;
     align-items: center;
     width: 100%;
 }
 
+/* Style the pagination links/buttons */
+.pagination-container a, 
+.pagination-container span[aria-current="page"] > span,
+.pagination-container span[aria-disabled="true"] > span {
+    padding: 0.5rem 0.85rem;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid transparent;
+}
+
+.pagination-container a {
+    color: var(--text-muted);
+    background: #F1F3F5;
+}
+
+.pagination-container a:hover {
+    background: #E9ECEF;
+    color: var(--text-primary);
+}
+
+.pagination-container span[aria-current="page"] > span {
+    background: var(--kinetic-yellow);
+    color: #000;
+    box-shadow: 0 2px 8px rgba(252, 212, 0, 0.2);
+}
+
+.pagination-container span[aria-disabled="true"] > span {
+    color: #ADB5BD;
+    cursor: not-allowed;
+    background: #F8F9FA;
+}
+
 .pagination-info {
     font-size: 0.85rem;
     color: var(--text-muted);
-    font-weight: 600;
 }

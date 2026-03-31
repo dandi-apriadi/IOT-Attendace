@@ -1,9 +1,16 @@
 @extends('layouts.app')
 
+@section('title', 'Manajemen Kelas')
+@section('breadcrumb')
+    <span>Master Data</span>
+    <span class="breadcrumb-sep">/</span>
+    <span>Kelas</span>
+@endsection
+
 @section('content')
 <div class="glass-card">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-        <h3 class="display-font">Manajemen Kelas</h3>
+        <h3 class="display-font" style="font-size: 1.1rem; color: var(--primary-blue-container);">Daftar Seluruh Kelas</h3>
         <span style="font-size:0.85rem; color:#6b7280;">Total {{ number_format($kelasList->total()) }} kelas</span>
     </div>
 
@@ -58,7 +65,7 @@
         @endforelse
     </div>
 
-    <div style="margin-top:1rem;">
+    <div class="pagination-container">
         {{ $kelasList->links() }}
     </div>
 </div>

@@ -1,5 +1,12 @@
 @extends('layouts.app')
 
+@section('title', 'Buka Sesi Presensi')
+@section('breadcrumb')
+    <span>Operational</span>
+    <span class="breadcrumb-sep">/</span>
+    <span>Buka Sesi</span>
+@endsection
+
 @section('content')
 <div style="max-width: 800px; margin: 0 auto;">
     <div class="glass-card" style="text-align: center; padding: 4rem 2rem;">

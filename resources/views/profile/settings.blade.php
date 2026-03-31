@@ -1,5 +1,10 @@
 @extends('layouts.app')
 
+@section('title', 'Pengaturan Akun')
+@section('breadcrumb')
+    <span>Pengaturan</span>
+@endsection
+
 @section('content')
 <div style="max-width: 800px;">
     @if (session('success'))

@@ -1,9 +1,16 @@
 @extends('layouts.app')
 
+@section('title', 'Data Master Mata Kuliah')
+@section('breadcrumb')
+    <span>Master Data</span>
+    <span class="breadcrumb-sep">/</span>
+    <span>Mata Kuliah</span>
+@endsection
+
 @section('content')
-<div class="glass-card">
+<div class="glass-card" style="margin-bottom: 2rem;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
-        <h3 class="display-font">Data Mata Kuliah</h3>
+        <h3 class="display-font" style="font-size: 1.1rem; color: var(--primary-blue-container);">Daftar Mata Kuliah</h3>
         <span style="font-size:0.85rem; color:#6b7280;">Total {{ number_format($mataKuliahList->total()) }} mata kuliah</span>
     </div>
     
@@ -71,7 +78,7 @@
         </tbody>
     </table>
 
-    <div style="margin-top:1rem;">
+    <div class="pagination-container">
         {{ $mataKuliahList->links() }}
     </div>
 </div>

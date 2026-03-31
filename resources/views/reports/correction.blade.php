@@ -1,5 +1,12 @@
 @extends('layouts.app')
 
+@section('title', 'Koreksi Data Absensi')
+@section('breadcrumb')
+    <span>Admin & Reports</span>
+    <span class="breadcrumb-sep">/</span>
+    <span>Koreksi Data</span>
+@endsection
+
 @section('content')
 <div class="glass-card">
     @php
@@ -10,8 +17,8 @@
 
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
         <div>
-            <h3 class="display-font">Laporan Koreksi Data</h3>
-            <div style="font-size: 0.85rem; color: #6b7280; margin-top: 0.5rem;">Kelola permintaan koreksi data absensi</div>
+            <h3 class="display-font" style="font-size: 1.1rem; color: var(--primary-blue-container);">Permintaan Koreksi Absensi</h3>
+            <div style="font-size: 0.85rem; color: #6b7280; margin-top: 0.25rem;">Kelola permintaan koreksi data absensi</div>
         </div>
         <a href="{{ route('correction.create') }}" class="btn-kinetic" style="text-decoration: none; padding: 0.75rem 1.5rem;">+ Buat Permintaan Baru</a>
     </div>
@@ -95,7 +102,7 @@
     </table>
 
     <!-- Pagination -->
-    <div style="margin-top: 2rem;">
+    <div class="pagination-container">
         {{ $corrections->links() }}
     </div>
 </div>

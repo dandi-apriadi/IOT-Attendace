@@ -1,9 +1,16 @@
 @extends('layouts.app')
 
+@section('title', 'Data Master Mahasiswa')
+@section('breadcrumb')
+    <span>Master Data</span>
+    <span class="breadcrumb-sep">/</span>
+    <span>Mahasiswa</span>
+@endsection
+
 @section('content')
 <div class="glass-card" style="margin-bottom: 2rem;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-        <h3 class="display-font">Data Master Mahasiswa</h3>
+        <h3 class="display-font" style="font-size: 1.1rem; color: var(--primary-blue-container);">Daftar Seluruh Mahasiswa</h3>
     </div>
 
     @if (session('success'))
