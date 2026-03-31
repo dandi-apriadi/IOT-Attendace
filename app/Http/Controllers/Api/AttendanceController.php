@@ -17,6 +17,11 @@ use Throwable;
 class AttendanceController extends Controller
 {
     /**
+     * Standard grace period for attendance in minutes.
+     */
+    const GRACE_PERIOD_MINUTES = 15;
+
+    /**
      * Handle IoT Attendance Tap
      */
     public function store(Request $request)
@@ -56,24 +61,28 @@ class AttendanceController extends Controller
         // 2. Determine Active Schedule (PRIORITY: Manual Cache > Automatic Schedule)
         $jadwal = null;
         $manualSession = Cache::get('active_attendance_session');
+        $baselineTime = null;
 
         if ($manualSession) {
-            // Find a schedule for this course/class/dosen if available, 
-            // or just use ANY valid schedule segment that matches the manual criteria.
-            // For the sake of data integrity, we should find/create a 'Jadwal' or just use the IDs.
-            // Usually, there is a Jadwal record for every MK/Kelas/Dosen combo.
             $jadwal = Jadwal::where('mata_kuliah_id', $manualSession['mata_kuliah_id'])
                 ->where('kelas_id', $manualSession['kelas_id'])
                 ->first();
+            
+            if ($jadwal) {
+               // For manual sessions, the grace period is based on when the session actually started.
+               $baselineTime = $manualSession['started_at'] ?? $jadwal->jam_mulai;
+            }
         }
 
         if (!$jadwal) {
-            $dayName = $this->getIndoDayName($now);
+            $dayNames = $this->getDayNames($now);
             $jadwal = Jadwal::where('kelas_id', $mahasiswa->kelas_id)
-                ->where('hari', $dayName)
+                ->whereIn('hari', $dayNames)
                 ->where('jam_mulai', '<=', $time)
                 ->where('jam_selesai', '>=', $time)
                 ->first();
+            
+            $baselineTime = $jadwal?->jam_mulai;
         }
 
         if (!$jadwal) {
@@ -83,7 +92,7 @@ class AttendanceController extends Controller
         }
 
         // 3. Mark Attendance with transaction and lock to reduce race conditions.
-        $status = $this->calculateStatus($time, $jadwal->jam_mulai);
+        $status = $this->calculateStatus($time, $baselineTime);
 
         DB::transaction(function () use ($mahasiswa, $jadwal, $date, $time, $request, $status): void {
             $existingAttendance = Absensi::where('mahasiswa_id', $mahasiswa->id)
@@ -147,28 +156,30 @@ class AttendanceController extends Controller
         }
     }
 
-    private function calculateStatus($tapTime, $startTime)
+    private function calculateStatus($tapTime, $baselineTime)
     {
         $tap = Carbon::parse($tapTime);
-        $start = Carbon::parse($startTime);
+        $baseline = Carbon::parse($baselineTime);
 
-        if ($tap->diffInMinutes($start, false) > 15) {
+        // If tap is more than GRACE_PERIOD_MINUTES after baseline, mark as Late (Telat).
+        if ($tap->diffInMinutes($baseline, false) > self::GRACE_PERIOD_MINUTES) {
             return 'Telat';
         }
         return 'Hadir';
     }
 
-    private function getIndoDayName($date): string
+    private function getDayNames($date): array
     {
-        return match ($date->dayOfWeekIso) {
-            1 => 'Senin',
-            2 => 'Selasa',
-            3 => 'Rabu',
-            4 => 'Kamis',
-            5 => 'Jumat',
-            6 => 'Sabtu',
-            7 => 'Minggu',
-            default => $date->format('l'),
-        };
+        $map = [
+            1 => ['Senin', 'Monday'],
+            2 => ['Selasa', 'Tuesday'],
+            3 => ['Rabu', 'Wednesday'],
+            4 => ['Kamis', 'Thursday'],
+            5 => ['Jumat', 'Friday'],
+            6 => ['Sabtu', 'Saturday'],
+            7 => ['Minggu', 'Sunday'],
+        ];
+
+        return $map[$date->dayOfWeekIso] ?? [$date->format('l')];
     }
 }

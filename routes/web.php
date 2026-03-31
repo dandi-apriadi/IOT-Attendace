@@ -37,6 +37,7 @@ Route::get('/public/billboard', [BillboardController::class, 'index'])->name('pu
 
 Route::middleware(['auth', 'role:admin,dosen'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::redirect('/mahasiswa', '/master/mahasiswa');
 
     // Operational
     Route::get('/dosen/session', [DosenSessionController::class, 'create'])->name('dosen-session');

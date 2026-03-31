@@ -1,10 +1,23 @@
 @extends('layouts.app')
 
+@section('title', 'Laporan Presensi')
+@section('breadcrumb')
+    <span>Admin & Reports</span>
+    <span class="breadcrumb-sep">/</span>
+    <span>Laporan</span>
+@endsection
+
 @section('content')
 <div class="glass-card">
-    <h3 class="display-font" style="margin-bottom: 1.5rem;">Statistik Kehadiran Bulanan</h3>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+        <div>
+            <h3 class="display-font" style="font-size: 1.1rem; color: var(--primary-blue-container);">Laporan Presensi Mahasiswa</h3>
+            <div style="font-size: 0.85rem; color: #6b7280; margin-top: 0.25rem;">Rekapitulasi kehadiran mahasiswa berdasarkan filter</div>
+        </div>
+    </div>
 
-    <form method="GET" action="{{ route('reports.index') }}" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+    <!-- Filter Form -->
+    <form action="{{ route('reports.index') }}" method="GET" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 2rem; background: #f9fafb; padding: 1.25rem; border-radius: 12px; border: 1px solid #e5e7eb;">
         <div>
             <label style="display:block; font-size:0.75rem; font-weight:700; margin-bottom:0.4rem;">Kelas</label>
             <select name="kelas_id" class="form-input">
@@ -63,7 +76,7 @@
         </tbody>
     </table>
 
-    <div style="margin-top: 1rem;">
+    <div class="pagination-container">
         {{ $stats->links() }}
     </div>
 </div>
