@@ -14,6 +14,15 @@
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
                 <div class="form-group">
+                    <label>Semester</label>
+                    <select name="semester_akademik_id" class="form-control" required>
+                        @foreach ($semesterList as $semester)
+                            <option value="{{ $semester->id }}" {{ $jadwal->semester_akademik_id == $semester->id ? 'selected' : '' }}>{{ $semester->display_name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div class="form-group">
                     <label>Mata Kuliah</label>
                     <select name="mata_kuliah_id" class="form-control" required>
                         @foreach ($mataKuliahList as $mk)

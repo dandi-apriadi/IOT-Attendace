@@ -21,4 +21,9 @@ class MataKuliah extends Model
     {
         return $this->hasMany(Jadwal::class);
     }
+
+    public function dosenAssignment()
+    {
+        return $this->hasOne(MataKuliahDosenAssignment::class, 'mata_kuliah_id');
+    }
 }

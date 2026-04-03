@@ -5,25 +5,25 @@
     <div class="glass-card" style="margin-bottom: 1.25rem;">
         <div style="display:flex; justify-content:space-between; align-items:flex-start; gap: 1rem; flex-wrap: wrap;">
             <div>
-                <h3 class="display-font" style="margin:0;">Detail Sesi Manual</h3>
+                <h3 class="display-font" style="margin:0;">Detail Sesi Jadwal</h3>
                 <div style="margin-top:0.4rem; color:#6b7280; font-size:0.88rem;">
                     {{ $mataKuliah->nama_mk }} ({{ $mataKuliah->kode_mk }}) · Kelas {{ $kelas->nama_kelas }} · {{ \Carbon\Carbon::parse($selectedDate)->translatedFormat('d F Y') }}
                 </div>
             </div>
             <div style="display:flex; gap:0.45rem; flex-wrap:wrap;">
-                <a href="{{ route('dosen-session.detail.export.excel', ['date' => $selectedDate, 'mata_kuliah_id' => $mataKuliah->id, 'kelas_id' => $kelas->id]) }}" class="btn-kinetic" style="text-decoration:none; padding:0.6rem 0.9rem; font-size:0.82rem;">
+                <a href="{{ route('dosen-schedule.detail.export.excel', ['date' => $selectedDate, 'mata_kuliah_id' => $mataKuliah->id, 'kelas_id' => $kelas->id]) }}" class="btn-kinetic" style="text-decoration:none; padding:0.6rem 0.9rem; font-size:0.82rem;">
                     Export Excel
                 </a>
-                <a href="{{ route('dosen-session.detail.export.pdf', ['date' => $selectedDate, 'mata_kuliah_id' => $mataKuliah->id, 'kelas_id' => $kelas->id]) }}" target="_blank" class="btn-kinetic" style="text-decoration:none; padding:0.6rem 0.9rem; font-size:0.82rem; background:#0066CC;">
+                <a href="{{ route('dosen-schedule.detail.export.pdf', ['date' => $selectedDate, 'mata_kuliah_id' => $mataKuliah->id, 'kelas_id' => $kelas->id]) }}" target="_blank" class="btn-kinetic" style="text-decoration:none; padding:0.6rem 0.9rem; font-size:0.82rem; background:#0066CC;">
                     Export PDF
                 </a>
-                <a href="{{ route('dosen-session') }}" class="btn-kinetic" style="text-decoration:none; padding:0.6rem 0.9rem; font-size:0.82rem; background:#374151;">
+                <a href="{{ route('dosen-courses') }}" class="btn-kinetic" style="text-decoration:none; padding:0.6rem 0.9rem; font-size:0.82rem; background:#374151;">
                     Kembali
                 </a>
             </div>
         </div>
 
-        <form method="GET" action="{{ route('dosen-session.detail') }}" style="display:grid; grid-template-columns: 1fr auto; gap:0.6rem; margin-top: 1rem; max-width: 420px;">
+        <form method="GET" action="{{ route('dosen-schedule.detail') }}" style="display:grid; grid-template-columns: 1fr auto; gap:0.6rem; margin-top: 1rem; max-width: 420px;">
             <input type="hidden" name="mata_kuliah_id" value="{{ $mataKuliah->id }}" />
             <input type="hidden" name="kelas_id" value="{{ $kelas->id }}" />
             <input type="date" name="date" value="{{ $selectedDate }}" style="padding:0.62rem 0.72rem; border:1px solid #e5e7eb; border-radius:10px;" />

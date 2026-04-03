@@ -8,6 +8,7 @@ use App\Models\Jadwal;
 use App\Models\Kelas;
 use App\Models\Mahasiswa;
 use App\Models\MataKuliah;
+use App\Models\MataKuliahDosenAssignment;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -20,26 +21,49 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class DosenSessionController extends Controller
 {
-    public function create(): View
+    public function create(Request $request): RedirectResponse
     {
-        // Check if there is already an active manual session
-        $activeSession = Cache::get('active_attendance_session');
+        return redirect()->route('dosen-courses')
+            ->with('info', 'Sesi presensi dibuka langsung dari jadwal pada halaman Mata Kuliah Saya.');
+    }
 
-        // Fetch all kelas and mata_kuliah for dropdown options
-        $kelasOptions = Kelas::all()->map(fn ($k) => [
-            'id' => $k->id,
-            'label' => $k->nama_kelas,
-        ])->values();
-        
-        $mataKuliahOptions = MataKuliah::all()->map(fn ($mk) => [
-            'id' => $mk->id,
-            'label' => "{$mk->nama_mk} ({$mk->kode_mk})",
-        ])->values();
-        
-        return view('dosen.session', [
-            'kelasOptions' => $kelasOptions,
-            'mataKuliahOptions' => $mataKuliahOptions,
-            'activeSession' => $activeSession,
+    public function courses(Request $request): View
+    {
+        $user = $request->user();
+        $assignedCourseIds = $this->assignedCourseIds((int) ($user?->id ?? 0));
+
+        $query = Jadwal::with(['semesterAkademik', 'kelas', 'mata_kuliah'])
+            ->when($user?->role !== 'admin', function ($builder) use ($user): void {
+                $courseIds = $this->assignedCourseIds((int) ($user?->id ?? 0));
+                if ($courseIds === []) {
+                    $builder->whereRaw('1 = 0');
+                } else {
+                    $builder->whereIn('mata_kuliah_id', $courseIds);
+                }
+            })
+            ->orderByDesc('semester_akademik_id')
+            ->orderBy('mata_kuliah_id')
+            ->orderBy('kelas_id')
+            ->orderBy('hari')
+            ->orderBy('jam_mulai');
+
+        $groupedSchedules = $query->get()
+            ->groupBy(function (Jadwal $jadwal): string {
+                return $jadwal->semesterAkademik?->display_name ?? 'Belum ditentukan';
+            })
+            ->map(function ($items, string $semesterLabel): array {
+                return [
+                    'semester' => $semesterLabel,
+                    'total' => $items->count(),
+                    'items' => $items->values(),
+                ];
+            })
+            ->values();
+
+        return view('dosen.courses', [
+            'groupedSchedules' => $groupedSchedules,
+            'todayDate' => now()->toDateString(),
+            'assignedCourseIds' => $assignedCourseIds,
         ]);
     }
 
@@ -50,21 +74,45 @@ class DosenSessionController extends Controller
             'kelas_id' => 'required|exists:kelas,id',
         ]);
 
+        $user = $request->user();
+
+        if ($user?->role !== 'admin') {
+            $isOwner = MataKuliahDosenAssignment::query()
+                ->where('mata_kuliah_id', (int) $data['mata_kuliah_id'])
+                ->where('user_id', (int) $user?->id)
+                ->exists();
+
+            if (! $isOwner) {
+                return redirect()->route('dosen-courses')
+                    ->with('error', 'Sesi hanya bisa dibuka untuk mata kuliah yang Anda ampu.');
+            }
+        }
+
+        $jadwalQuery = Jadwal::query()
+            ->where('mata_kuliah_id', $data['mata_kuliah_id'])
+            ->where('kelas_id', $data['kelas_id']);
+
+        $hasAssignedSchedule = $jadwalQuery->exists();
+        if (! $hasAssignedSchedule) {
+            return redirect()->route('dosen-courses')
+                ->with('error', 'Sesi hanya bisa dibuka untuk jadwal yang ditetapkan kepada dosen.');
+        }
+
         Cache::put('active_attendance_session', [
             'mata_kuliah_id' => $data['mata_kuliah_id'],
             'kelas_id' => $data['kelas_id'],
             'started_at' => now()->toDateTimeString(),
-            'user_id' => auth()->id(),
-            'source' => 'manual',
+            'user_id' => $request->user()?->id,
+            'source' => 'schedule',
         ], now()->addHours(3));
 
-        return redirect()->route('monitoring')->with('success', 'Sesi manual berhasil diaktifkan.');
+        return redirect()->route('monitoring')->with('success', 'Sesi presensi jadwal berhasil diaktifkan.');
     }
 
     public function destroy(): RedirectResponse
     {
         Cache::forget('active_attendance_session');
-        return redirect()->route('dosen-session')->with('success', 'Sesi manual telah ditutup.');
+        return redirect()->route('dosen-courses')->with('success', 'Sesi presensi telah ditutup.');
     }
 
     public function detail(): View|RedirectResponse
@@ -172,6 +220,7 @@ class DosenSessionController extends Controller
     private function buildDetailData(string $selectedDate, $mataKuliahId = null, $kelasId = null): array
     {
         $activeSession = Cache::get('active_attendance_session');
+        $currentUser = request()->user();
 
         // Prioritize parameters, fallback to cache
         $finalMkId = $mataKuliahId ?? ($activeSession['mata_kuliah_id'] ?? null);
@@ -179,7 +228,7 @@ class DosenSessionController extends Controller
 
         if (! $finalMkId || ! $finalKelasId) {
             return [
-                'redirect' => redirect()->route('dosen-session')->with('error', 'Silakan pilih mata kuliah dan kelas terlebih dahulu atau aktifkan sesi.'),
+                'redirect' => redirect()->route('dosen-courses')->with('error', 'Buka sesi dari jadwal yang tersedia di Mata Kuliah Saya.'),
             ];
         }
 
@@ -188,19 +237,40 @@ class DosenSessionController extends Controller
 
         if (! $mataKuliah || ! $kelas) {
             return [
-                'redirect' => redirect()->route('dosen-session')->with('error', 'Data mata kuliah atau kelas tidak ditemukan.'),
+                'redirect' => redirect()->route('dosen-courses')->with('error', 'Data mata kuliah atau kelas tidak ditemukan.'),
             ];
         }
 
         $date = Carbon::parse($selectedDate);
         $dayNames = $this->dayNames($date);
 
-        $jadwalIds = Jadwal::query()
+        $jadwalQuery = Jadwal::query()
             ->where('kelas_id', $kelas->id)
             ->where('mata_kuliah_id', $mataKuliah->id)
-            ->whereIn('hari', $dayNames)
+            ->whereIn('hari', $dayNames);
+
+        if ($currentUser?->role !== 'admin') {
+            $isOwner = MataKuliahDosenAssignment::query()
+                ->where('mata_kuliah_id', $mataKuliah->id)
+                ->where('user_id', (int) $currentUser?->id)
+                ->exists();
+
+            if (! $isOwner) {
+                return [
+                    'redirect' => redirect()->route('dosen-courses')->with('error', 'Anda tidak memiliki akses ke mata kuliah ini.'),
+                ];
+            }
+        }
+
+        $jadwalIds = $jadwalQuery
             ->pluck('id')
             ->values();
+
+        if ($jadwalIds->isEmpty()) {
+            return [
+                'redirect' => redirect()->route('dosen-courses')->with('error', 'Anda tidak memiliki akses ke mata kuliah/kelas ini.'),
+            ];
+        }
 
         $students = Mahasiswa::query()
             ->where('kelas_id', $kelas->id)
@@ -289,6 +359,20 @@ class DosenSessionController extends Controller
         } catch (\Throwable) {
             return now()->toDateString();
         }
+    }
+
+    private function assignedCourseIds(int $userId): array
+    {
+        if ($userId <= 0) {
+            return [];
+        }
+
+        return MataKuliahDosenAssignment::query()
+            ->where('user_id', $userId)
+            ->pluck('mata_kuliah_id')
+            ->map(static fn ($id) => (int) $id)
+            ->values()
+            ->all();
     }
 
     private function formatTapTime(string $status, mixed $waktuTap): string

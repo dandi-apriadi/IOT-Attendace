@@ -18,7 +18,7 @@
 </head>
 <body>
 
-    <h2 style="margin: 0 0 6px;">Detail Sesi Manual</h2>
+    <h2 style="margin: 0 0 6px;">Detail Sesi Jadwal</h2>
     <div class="meta">
         {{ $mataKuliah->nama_mk }} ({{ $mataKuliah->kode_mk }}) | Kelas {{ $kelas->nama_kelas }} | {{ \Carbon\Carbon::parse($selectedDate)->translatedFormat('d F Y') }}
     </div>

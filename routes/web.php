@@ -40,12 +40,12 @@ Route::middleware(['auth', 'role:admin,dosen'])->group(function () {
     Route::redirect('/mahasiswa', '/master/mahasiswa');
 
     // Operational
-    Route::get('/dosen/session', [DosenSessionController::class, 'create'])->name('dosen-session');
-    Route::get('/dosen/session/detail', [DosenSessionController::class, 'detailByFilter'])->name('dosen-session.detail');
-    Route::get('/dosen/session/detail/export/excel', [DosenSessionController::class, 'exportExcel'])->name('dosen-session.detail.export.excel');
-    Route::get('/dosen/session/detail/export/pdf', [DosenSessionController::class, 'exportPdf'])->name('dosen-session.detail.export.pdf');
-    Route::post('/dosen/session/start', [DosenSessionController::class, 'store'])->name('dosen-session.start');
-    Route::delete('/dosen/session/stop', [DosenSessionController::class, 'destroy'])->name('dosen-session.stop');
+    Route::get('/dosen/mata-kuliah', [DosenSessionController::class, 'courses'])->name('dosen-courses');
+    Route::get('/dosen/schedule/detail', [DosenSessionController::class, 'detailByFilter'])->name('dosen-schedule.detail');
+    Route::get('/dosen/schedule/detail/export/excel', [DosenSessionController::class, 'exportExcel'])->name('dosen-schedule.detail.export.excel');
+    Route::get('/dosen/schedule/detail/export/pdf', [DosenSessionController::class, 'exportPdf'])->name('dosen-schedule.detail.export.pdf');
+    Route::post('/dosen/schedule/start', [DosenSessionController::class, 'store'])->name('dosen-schedule.start');
+    Route::delete('/dosen/schedule/stop', [DosenSessionController::class, 'destroy'])->name('dosen-schedule.stop');
     Route::get('/monitoring/live', [MonitoringLiveController::class, 'index'])->name('monitoring');
     Route::get('/monitoring/live/data', [MonitoringLiveController::class, 'data'])->name('monitoring.live.data');
     Route::get('/monitoring/live/{absensi}/edit', [MonitoringLiveController::class, 'edit'])->name('monitoring.live.edit');
@@ -56,11 +56,15 @@ Route::middleware(['auth', 'role:admin,dosen'])->group(function () {
 
     // Reports
     Route::get('/reports', [ReportsController::class, 'index'])->name('reports.index');
+    Route::get('/reports/export/excel', [ReportsController::class, 'exportExcel'])->name('reports.export.excel');
+    Route::get('/reports/export/pdf', [ReportsController::class, 'exportPdf'])->name('reports.export.pdf');
 
     Route::get('/profile/settings', [ProfileController::class, 'settings'])->name('settings');
     Route::post('/profile/settings', [ProfileController::class, 'updateProfile'])->name('profile.update');
     Route::post('/profile/password', [ProfileController::class, 'updatePassword'])->name('profile.password');
     Route::get('/student/{id}', [StudentDetailController::class, 'show'])->name('student-detail');
+    Route::get('/student/{id}/export/excel', [StudentDetailController::class, 'exportExcel'])->name('student-detail.export.excel');
+    Route::get('/student/{id}/export/pdf', [StudentDetailController::class, 'exportPdf'])->name('student-detail.export.pdf');
 });
 
 Route::middleware(['auth', 'role:admin'])->group(function () {

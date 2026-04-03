@@ -15,6 +15,7 @@ class Jadwal extends Model
         'kelas_id',
         'mata_kuliah_id',
         'user_id',
+        'semester_akademik_id',
         'hari',
         'jam_mulai',
         'jam_selesai',
@@ -33,6 +34,11 @@ class Jadwal extends Model
     public function dosen()
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function semesterAkademik()
+    {
+        return $this->belongsTo(SemesterAkademik::class, 'semester_akademik_id');
     }
 
     public function absensi()

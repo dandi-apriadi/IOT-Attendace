@@ -29,6 +29,15 @@
     <form action="{{ route('jadwal.store') }}" method="POST" style="margin-bottom: 2rem; background: #F8FAFC; padding: 1.5rem; border-radius: 12px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
         @csrf
         <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size: 0.75rem; font-weight: 700; color: #6b7280; display: block; margin-bottom: 0.5rem;">SEMESTER</label>
+            <select name="semester_akademik_id" class="form-control" required>
+                <option value="">Pilih Semester</option>
+                @foreach ($semesterList as $semester)
+                    <option value="{{ $semester->id }}" {{ (string) old('semester_akademik_id', $activeSemesterId) === (string) $semester->id ? 'selected' : '' }}>{{ $semester->display_name }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
             <label style="font-size: 0.75rem; font-weight: 700; color: #6b7280; display: block; margin-bottom: 0.5rem;">CARI MATA KULIAH</label>
             <select name="mata_kuliah_id" class="form-control" required>
                 <option value="">Pilih Mata Kuliah</option>
@@ -83,6 +92,7 @@
     <table>
         <thead>
             <tr>
+                <th>Semester</th>
                 <th>Hari</th>
                 <th>Mata Kuliah</th>
                 <th>Kelas</th>
@@ -94,6 +104,7 @@
         <tbody>
             @forelse ($jadwalList as $jadwal)
                 <tr>
+                    <td>{{ $jadwal->semesterAkademik?->display_name ?? 'Belum ditentukan' }}</td>
                     <td><strong>{{ $jadwal->hari }}</strong></td>
                     <td style="font-weight: 700; color: var(--primary-blue-container);">{{ $jadwal->mata_kuliah->nama_mk ?? '-' }}</td>
                     <td>{{ $jadwal->kelas->nama_kelas ?? '-' }}</td>
@@ -114,7 +125,7 @@
                 </tr>
             @empty
                 <tr>
-                    <td colspan="6" style="text-align:center; color:#6b7280;">Belum ada data jadwal.</td>
+                    <td colspan="7" style="text-align:center; color:#6b7280;">Belum ada data jadwal.</td>
                 </tr>
             @endforelse
         </tbody>

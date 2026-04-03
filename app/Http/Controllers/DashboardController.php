@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Absensi;
 use App\Models\Device;
 use App\Models\Jadwal;
+use App\Models\MataKuliahDosenAssignment;
+use App\Models\SemesterAkademik;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -12,7 +14,7 @@ use Illuminate\View\View;
 
 class DashboardController extends Controller
 {
-    public function index(): View
+    public function index(\Illuminate\Http\Request $request): View
     {
         $now = Carbon::now();
         $today = $now->copy()->startOfDay();
@@ -27,6 +29,11 @@ class DashboardController extends Controller
             ->count();
 
         $totalDeviceAktif = Device::where('is_active', true)->count();
+        $activeSemester = SemesterAkademik::query()
+            ->where('is_active', true)
+            ->orderByDesc('tanggal_mulai')
+            ->first()
+            ?? SemesterAkademik::query()->orderByDesc('tanggal_mulai')->first();
 
         $latestAbsensi = Absensi::with(['mahasiswa', 'jadwal.mata_kuliah'])
             ->orderByDesc('tanggal')
@@ -39,7 +46,7 @@ class DashboardController extends Controller
             ->get();
 
         $cacheTtlSeconds = 60;
-        $authUser = auth()->user();
+        $authUser = $request->user();
         $role = (string) ($authUser?->role ?? 'guest');
         $userId = (int) ($authUser?->id ?? 0);
 
@@ -64,10 +71,42 @@ class DashboardController extends Controller
             return $this->buildDosenCoursePerformanceChart($userId, $now);
         });
 
+        $dosenAssignedSchedules = collect();
+        $assignedCourseIds = $role === 'dosen' && $userId > 0
+            ? MataKuliahDosenAssignment::query()->where('user_id', $userId)->pluck('mata_kuliah_id')
+            : collect();
+
+        if ($role === 'dosen' && $userId > 0) {
+            $dosenAssignedSchedules = Jadwal::with(['semesterAkademik', 'kelas', 'mata_kuliah'])
+                ->whereIn('mata_kuliah_id', $assignedCourseIds)
+                ->orderByDesc('semester_akademik_id')
+                ->orderBy('mata_kuliah_id')
+                ->orderBy('kelas_id')
+                ->orderBy('hari')
+                ->orderBy('jam_mulai')
+                ->get()
+                ->groupBy(fn (Jadwal $jadwal): string => $jadwal->semesterAkademik?->display_name ?? 'Belum ditentukan')
+                ->map(function ($items, string $semesterLabel): array {
+                    return [
+                        'semester' => $semesterLabel,
+                        'total' => $items->count(),
+                        'items' => $items->take(4)->values(),
+                    ];
+                })
+                ->values();
+        }
+
+        $dosenScheduleCount = $role === 'dosen' && $userId > 0
+            ? Jadwal::whereIn('mata_kuliah_id', $assignedCourseIds)->count()
+            : 0;
+
         return view('dashboard', [
             'hadirHariIni' => $hadirHariIni,
             'sesiAktif' => $sesiAktif,
             'totalDeviceAktif' => $totalDeviceAktif,
+            'activeSemester' => $activeSemester,
+            'dosenAssignedSchedules' => $dosenAssignedSchedules,
+            'dosenScheduleCount' => $dosenScheduleCount,
             'latestAbsensi' => $latestAbsensi,
             'recentDevices' => $recentDevices,
             'adminWeeklyChart' => $adminWeeklyChart,
@@ -150,10 +189,21 @@ class DashboardController extends Controller
         )));
         $presentPlaceholders = implode(', ', array_fill(0, count($presentStatuses), '?'));
 
+        $assignedCourseIds = MataKuliahDosenAssignment::query()
+            ->where('user_id', $dosenId)
+            ->pluck('mata_kuliah_id');
+
+        if ($assignedCourseIds->isEmpty()) {
+            return [
+                'labels' => ['Belum ada data'],
+                'data' => [0],
+            ];
+        }
+
         $rows = DB::table('absensi as a')
             ->join('jadwal as j', 'j.id', '=', 'a.jadwal_id')
             ->join('kelas as k', 'k.id', '=', 'j.kelas_id')
-            ->where('j.user_id', $dosenId)
+            ->whereIn('j.mata_kuliah_id', $assignedCourseIds)
             ->whereBetween('a.tanggal', [$start, $end])
             ->select('k.nama_kelas')
             ->selectRaw('COUNT(*) as total')
@@ -206,10 +256,21 @@ class DashboardController extends Controller
         )));
         $presentPlaceholders = implode(', ', array_fill(0, count($presentStatuses), '?'));
 
+        $assignedCourseIds = MataKuliahDosenAssignment::query()
+            ->where('user_id', $dosenId)
+            ->pluck('mata_kuliah_id');
+
+        if ($assignedCourseIds->isEmpty()) {
+            return [
+                'labels' => ['Belum ada data'],
+                'data' => [0],
+            ];
+        }
+
         $rows = DB::table('absensi as a')
             ->join('jadwal as j', 'j.id', '=', 'a.jadwal_id')
             ->join('mata_kuliah as mk', 'mk.id', '=', 'j.mata_kuliah_id')
-            ->where('j.user_id', $dosenId)
+            ->whereIn('j.mata_kuliah_id', $assignedCourseIds)
             ->whereBetween('a.tanggal', [$start, $end])
             ->select('mk.nama_mk')
             ->selectRaw('COUNT(*) as total')

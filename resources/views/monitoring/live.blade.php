@@ -35,11 +35,11 @@
         </div>
         
         @if (isset($activeSession) && $activeSession['source'] === 'MANUAL')
-            <form action="{{ route('dosen-session.stop') }}" method="POST" style="margin: 0;">
+            <form action="{{ route('dosen-schedule.stop') }}" method="POST" style="margin: 0;">
                 @csrf
                 @method('DELETE')
                 <button type="submit" class="btn-kinetic" style="background: #BA1A1A; padding: 0.6rem 1.2rem; font-size: 0.8rem;">
-                    <i class="fas fa-stop-circle"></i> TUTUP SESI MANUAL
+                    <i class="fas fa-stop-circle"></i> TUTUP SESI PRESENSI
                 </button>
             </form>
         @endif

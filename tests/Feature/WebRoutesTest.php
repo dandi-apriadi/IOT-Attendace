@@ -131,12 +131,12 @@ class WebRoutesTest extends TestCase
     }
 
     /**
-     * Test dosen-session route
+     * Test dosen courses route
      */
-    public function test_dosen_session_route()
+    public function test_dosen_courses_route()
     {
         $this->actingAs($this->dosen);
-        $response = $this->get('/dosen/session');
+        $response = $this->get('/dosen/mata-kuliah');
         $response->assertStatus(200);
     }
 
