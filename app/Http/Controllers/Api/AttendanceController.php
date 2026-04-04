@@ -22,6 +22,11 @@ class AttendanceController extends Controller
     const GRACE_PERIOD_MINUTES = 15;
 
     /**
+     * Maximum meetings allowed per course in a semester.
+     */
+    const MAX_MEETINGS_PER_COURSE = 16;
+
+    /**
      * Handle IoT Attendance Tap
      */
     public function store(Request $request)
@@ -64,24 +69,36 @@ class AttendanceController extends Controller
         $baselineTime = null;
 
         if ($manualSession) {
-            $jadwal = Jadwal::where('mata_kuliah_id', $manualSession['mata_kuliah_id'])
+            $jadwal = Jadwal::query()
+                ->with(['mata_kuliah', 'semesterAkademik'])
+                ->where('mata_kuliah_id', $manualSession['mata_kuliah_id'])
                 ->where('kelas_id', $manualSession['kelas_id'])
+                ->whereHas('semesterAkademik', function ($q) use ($date) {
+                    $q->whereDate('tanggal_mulai', '<=', $date)
+                        ->whereDate('tanggal_selesai', '>=', $date);
+                })
                 ->first();
-            
+
             if ($jadwal) {
-               // For manual sessions, the grace period is based on when the session actually started.
-               $baselineTime = $manualSession['started_at'] ?? $jadwal->jam_mulai;
+                // For manual sessions, the grace period is based on when the session actually started.
+                $baselineTime = $manualSession['started_at'] ?? $jadwal->jam_mulai;
             }
         }
 
         if (!$jadwal) {
             $dayNames = $this->getDayNames($now);
-            $jadwal = Jadwal::where('kelas_id', $mahasiswa->kelas_id)
+            $jadwal = Jadwal::query()
+                ->with(['mata_kuliah', 'semesterAkademik'])
+                ->where('kelas_id', $mahasiswa->kelas_id)
                 ->whereIn('hari', $dayNames)
                 ->where('jam_mulai', '<=', $time)
                 ->where('jam_selesai', '>=', $time)
+                ->whereHas('semesterAkademik', function ($q) use ($date) {
+                    $q->whereDate('tanggal_mulai', '<=', $date)
+                        ->whereDate('tanggal_selesai', '>=', $date);
+                })
                 ->first();
-            
+
             $baselineTime = $jadwal?->jam_mulai;
         }
 
@@ -91,15 +108,61 @@ class AttendanceController extends Controller
             return response()->json(['message' => 'Tidak ada jadwal/sesi aktif saat ini'], 400);
         }
 
+        $semester = $jadwal->semesterAkademik;
+        if (!$semester) {
+            $queryDurationMs = (microtime(true) - $queryStartedAt) * 1000;
+            $this->recordApiPerformanceMetric($queryDurationMs, $requestStartedAt, $resultCount, $request);
+
+            return response()->json(['message' => 'Jadwal belum memiliki semester akademik aktif'], 400);
+        }
+
+        $semesterStart = Carbon::parse($semester->tanggal_mulai)->startOfDay();
+        $semesterEnd = Carbon::parse($semester->tanggal_selesai)->endOfDay();
+
+        if ($now->lt($semesterStart) || $now->gt($semesterEnd)) {
+            $queryDurationMs = (microtime(true) - $queryStartedAt) * 1000;
+            $this->recordApiPerformanceMetric($queryDurationMs, $requestStartedAt, $resultCount, $request);
+
+            return response()->json(['message' => 'Absensi hanya dapat dilakukan pada periode semester yang aktif'], 400);
+        }
+
+        $courseJadwalIds = Jadwal::query()
+            ->where('kelas_id', $jadwal->kelas_id)
+            ->where('mata_kuliah_id', $jadwal->mata_kuliah_id)
+            ->where('semester_akademik_id', $jadwal->semester_akademik_id)
+            ->pluck('id');
+
+        if ($courseJadwalIds->isEmpty()) {
+            $queryDurationMs = (microtime(true) - $queryStartedAt) * 1000;
+            $this->recordApiPerformanceMetric($queryDurationMs, $requestStartedAt, $resultCount, $request);
+
+            return response()->json(['message' => 'Jadwal perkuliahan tidak ditemukan'], 400);
+        }
+
         // 3. Mark Attendance with transaction and lock to reduce race conditions.
         $status = $this->calculateStatus($time, $baselineTime);
 
-        DB::transaction(function () use ($mahasiswa, $jadwal, $date, $time, $request, $status): void {
-            $existingAttendance = Absensi::where('mahasiswa_id', $mahasiswa->id)
+        $attendanceResult = DB::transaction(function () use ($mahasiswa, $jadwal, $courseJadwalIds, $date, $time, $request, $status) {
+            $courseAttendanceQuery = Absensi::query()
+                ->where('mahasiswa_id', $mahasiswa->id)
+                ->whereIn('jadwal_id', $courseJadwalIds)
+                ->lockForUpdate();
+
+            $existingAttendance = (clone $courseAttendanceQuery)
                 ->where('jadwal_id', $jadwal->id)
-                ->where('tanggal', $date)
-                ->lockForUpdate()
+                ->whereDate('tanggal', $date)
                 ->first();
+
+            if (!$existingAttendance) {
+                $courseAttendanceCount = (clone $courseAttendanceQuery)->count();
+
+                if ($courseAttendanceCount >= self::MAX_MEETINGS_PER_COURSE) {
+                    return [
+                        'ok' => false,
+                        'message' => 'Batas 16 pertemuan untuk mata kuliah ini sudah tercapai',
+                    ];
+                }
+            }
 
             if ($existingAttendance) {
                 $existingAttendance->update([
@@ -108,7 +171,7 @@ class AttendanceController extends Controller
                     'status' => $status,
                 ]);
 
-                return;
+                return ['ok' => true];
             }
 
             Absensi::create([
@@ -119,7 +182,16 @@ class AttendanceController extends Controller
                 'metode_absensi' => $request->type,
                 'status' => $status,
             ]);
+
+            return ['ok' => true];
         });
+
+        if (($attendanceResult['ok'] ?? false) === false) {
+            $queryDurationMs = (microtime(true) - $queryStartedAt) * 1000;
+            $this->recordApiPerformanceMetric($queryDurationMs, $requestStartedAt, $resultCount, $request);
+
+            return response()->json(['message' => $attendanceResult['message'] ?? 'Batas pertemuan telah tercapai'], 422);
+        }
 
         $queryDurationMs = (microtime(true) - $queryStartedAt) * 1000;
         $resultCount = 1;
