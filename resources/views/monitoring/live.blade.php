@@ -15,35 +15,98 @@
         </div>
     @endif
 
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem;">
         <div>
             <h3 class="display-font" style="margin: 0;">Live Attendance Stream</h3>
             @if (isset($activeSession))
-                <div style="margin-top: 0.5rem; display: flex; align-items: center; gap: 0.75rem;">
-                    <div style="background: {{ $activeSession['source'] === 'MANUAL' ? '#F59E0B' : '#0066CC' }}; color: white; padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.65rem; font-weight: 800; letter-spacing: 0.05em;">
-                        {{ $activeSession['source'] }}
+                <div style="margin-top: 0.5rem; display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                    <div style="background: {{ $activeSession['source'] === 'AUTO' ? '#0066CC' : '#F59E0B' }}; color: white; padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.65rem; font-weight: 800; letter-spacing: 0.05em;">
+                        {{ $activeSession['source'] === 'AUTO' ? 'AUTO' : 'MANUAL' }}
                     </div>
-                    <span style="font-size: 0.85rem; font-weight: 600; color: var(--primary-dark);">
-                        {{ $activeSession['mk_name'] }} ({{ $activeSession['mk_kode'] }}) - {{ $activeSession['kelas_name'] }}
+                    <span style="font-size: 0.9rem; font-weight: 700; color: var(--primary-dark);">
+                        <i class="fas fa-book-open" style="color: #0066CC;"></i>
+                        {{ $activeSession['mk_name'] }}
+                        <span style="color: #6b7280; font-weight: 400;">({{ $activeSession['mk_kode'] }})</span>
+                        <span style="color: #6b7280;">·</span>
+                        <i class="fas fa-users" style="color: #1DB173;"></i>
+                        {{ $activeSession['kelas_name'] }}
                     </span>
+                    @if ($activeSession['started_at'])
+                        <span style="font-size: 0.75rem; color: #6b7280;">
+                            <i class="fas fa-clock"></i> Mulai: {{ \Carbon\Carbon::parse($activeSession['started_at'])->format('H:i') }}
+                        </span>
+                    @endif
                 </div>
             @else
                 <div style="margin-top: 0.5rem; color: var(--text-muted); font-size: 0.85rem;">
-                    <i class="fas fa-info-circle"></i> Menunggu sesi otomatis atau manual diaktifkan...
+                    <i class="fas fa-info-circle"></i> Belum ada sesi presensi yang aktif. Buka sesi dari <a href="{{ route('dosen-courses') }}" style="color: #0066CC; font-weight: 600;">Mata Kuliah Saya</a>.
                 </div>
             @endif
         </div>
-        
-        @if (isset($activeSession) && $activeSession['source'] === 'MANUAL')
-            <form action="{{ route('dosen-schedule.stop') }}" method="POST" style="margin: 0;">
-                @csrf
-                @method('DELETE')
-                <button type="submit" class="btn-kinetic" style="background: #BA1A1A; padding: 0.6rem 1.2rem; font-size: 0.8rem;">
-                    <i class="fas fa-stop-circle"></i> TUTUP SESI PRESENSI
-                </button>
-            </form>
-        @endif
+
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            @if (isset($activeSession))
+                <form action="{{ route('dosen-schedule.stop') }}" method="POST" style="margin: 0;">
+                    @csrf
+                    @method('DELETE')
+                    <button type="submit" class="btn-kinetic" style="background: #BA1A1A; color: #fff; padding: 0.6rem 1.2rem; font-size: 0.8rem; border: none; cursor: pointer;">
+                        <i class="fas fa-stop-circle"></i> Tutup Sesi
+                    </button>
+                </form>
+            @else
+                <a href="{{ route('dosen-courses') }}" class="btn-kinetic" style="text-decoration: none; padding: 0.6rem 1.2rem; font-size: 0.8rem; background: #1DB173; color: #fff; box-shadow: none;">
+                    <i class="fas fa-play-circle"></i> Buka Sesi
+                </a>
+            @endif
+        </div>
     </div>
+
+    @if (isset($activeSession))
+        <div style="margin-bottom: 1.5rem; background: linear-gradient(135deg, rgba(0,102,204,0.06), rgba(29,177,115,0.06)); border: 2px solid #0066CC; border-radius: 16px; padding: 1.25rem 1.5rem;">
+            <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                <div style="width: 48px; height: 48px; background: #0066CC; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                    <i class="fas fa-chalkboard-teacher" style="font-size: 1.3rem; color: #fff;"></i>
+                </div>
+                <div style="flex: 1; min-width: 0;">
+                    <div style="font-size: 0.7rem; font-weight: 700; color: #0066CC; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.2rem;">
+                        <span style="display: inline-block; width: 8px; height: 8px; background: #1DB173; border-radius: 50%; margin-right: 0.35rem; animation: pulse 1.5s infinite;"></span>
+                        Sesi Aktif — {{ $activeSession['source'] === 'AUTO' ? 'Otomatis' : 'Manual' }}
+                    </div>
+                    <div style="font-size: 1.15rem; font-weight: 800; color: var(--primary-dark);">
+                        {{ $activeSession['mk_name'] }}
+                        <span style="color: #6b7280; font-weight: 400; font-size: 0.95rem;">({{ $activeSession['mk_kode'] }})</span>
+                    </div>
+                    <div style="font-size: 0.85rem; color: #6b7280; margin-top: 0.15rem;">
+                        <i class="fas fa-users" style="color: #1DB173;"></i> Kelas {{ $activeSession['kelas_name'] }}
+                        @if ($activeSession['started_at'])
+                            <span style="margin-left: 0.75rem;"><i class="fas fa-clock" style="color: #F59E0B;"></i> Mulai: {{ \Carbon\Carbon::parse($activeSession['started_at'])->format('H:i') }}</span>
+                        @endif
+                    </div>
+                </div>
+                <div style="display: flex; gap: 0.5rem; flex-shrink: 0;">
+                    <a href="{{ route('dosen-schedule.detail', ['date' => now()->toDateString(), 'mata_kuliah_id' => $activeSession['mata_kuliah_id'], 'kelas_id' => $activeSession['kelas_id']]) }}" class="btn-kinetic" style="text-decoration: none; padding: 0.55rem 0.9rem; font-size: 0.78rem; background: #0066CC; color: #fff; box-shadow: none;">
+                        <i class="fas fa-list-check"></i> Detail
+                    </a>
+                    <form action="{{ route('dosen-schedule.stop') }}" method="POST" style="margin: 0;">
+                        @csrf
+                        @method('DELETE')
+                        <button type="submit" class="btn-kinetic" style="background: #BA1A1A; color: #fff; padding: 0.55rem 0.9rem; font-size: 0.78rem; border: none; cursor: pointer;">
+                            <i class="fas fa-stop-circle"></i> Tutup Sesi
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    @else
+        <div style="margin-bottom: 1.5rem; background: #f8fafc; border: 2px dashed #d1d5db; border-radius: 16px; padding: 1.25rem 1.5rem; text-align: center;">
+            <div style="font-size: 2rem; color: #d1d5db; margin-bottom: 0.5rem;"><i class="fas fa-play-circle"></i></div>
+            <div style="font-size: 0.95rem; font-weight: 700; color: #6b7280; margin-bottom: 0.25rem;">Belum Ada Sesi Aktif</div>
+            <div style="font-size: 0.82rem; color: #9ca3af; margin-bottom: 0.75rem;">Buka sesi presensi untuk mulai menerima data kehadiran dari perangkat IoT.</div>
+            <a href="{{ route('dosen-courses') }}" class="btn-kinetic" style="text-decoration: none; padding: 0.6rem 1.2rem; font-size: 0.82rem; background: #1DB173; color: #fff; box-shadow: none;">
+                <i class="fas fa-play-circle"></i> Buka Sesi Presensi
+            </a>
+        </div>
+    @endif
 
     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 2rem; margin-bottom: 2rem;">
         <div style="background: #E6F6EC; padding: 1.5rem; border-radius: 12px;">
@@ -56,13 +119,18 @@
             <div id="this-hour-total" style="font-size: 2.5rem; font-weight: 800; color: #F59E0B; margin: 0.5rem 0;">{{ $thisHourTotal }}</div>
             <div style="font-size: 0.75rem; color: #6b7280;">Tap dalam 1 jam terakhir</div>
         </div>
-        <div style="background: #F0F5FF; padding: 1.5rem; border-radius: 12px;">
-            <div style="font-size: 0.8rem; color: #0066CC; font-weight: 700; text-transform: uppercase;">Live Status</div>
-            <div style="font-size: 2rem; font-weight: 800; color: #0066CC; margin: 0.5rem 0;">
-                <span style="display: inline-block; width: 12px; height: 12px; background: #1DB173; border-radius: 50%; margin-right: 0.5rem; animation: pulse 1.5s infinite;"></span>
-                ACTIVE
+        <div style="background: {{ isset($activeSession) ? '#F0F5FF' : '#f8fafc' }}; padding: 1.5rem; border-radius: 12px;">
+            <div style="font-size: 0.8rem; color: {{ isset($activeSession) ? '#0066CC' : '#9ca3af' }}; font-weight: 700; text-transform: uppercase;">Live Status</div>
+            <div style="font-size: 2rem; font-weight: 800; color: {{ isset($activeSession) ? '#0066CC' : '#9ca3af' }}; margin: 0.5rem 0;">
+                @if (isset($activeSession))
+                    <span style="display: inline-block; width: 12px; height: 12px; background: #1DB173; border-radius: 50%; margin-right: 0.5rem; animation: pulse 1.5s infinite;"></span>
+                    ACTIVE
+                @else
+                    <span style="display: inline-block; width: 12px; height: 12px; background: #d1d5db; border-radius: 50%; margin-right: 0.5rem;"></span>
+                    IDLE
+                @endif
             </div>
-            <div style="font-size: 0.75rem; color: #6b7280;">Real-time updates</div>
+            <div style="font-size: 0.75rem; color: #6b7280;">{{ isset($activeSession) ? 'Real-time updates' : 'Tidak ada sesi aktif' }}</div>
         </div>
     </div>
 

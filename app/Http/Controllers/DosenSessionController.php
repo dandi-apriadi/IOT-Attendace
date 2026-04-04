@@ -32,6 +32,89 @@ class DosenSessionController extends Controller
         $user = $request->user();
         $assignedCourseIds = $this->assignedCourseIds((int) ($user?->id ?? 0));
 
+        $activeSession = Cache::get('active_attendance_session');
+
+        // Auto-close: only close if the specific jadwal's time has passed on its scheduled day
+        if ($activeSession) {
+            $now = now();
+            $jadwalId = $activeSession['jadwal_id'] ?? null;
+
+            if ($jadwalId) {
+                $jadwal = Jadwal::find($jadwalId);
+
+                if ($jadwal) {
+                    $currentDayNames = $this->dayNames($now);
+                    $jamSelesai = Carbon::parse($jadwal->jam_selesai);
+
+                    // Only auto-close if today is the scheduled day AND time has passed
+                    $isScheduledDay = in_array($jadwal->hari, $currentDayNames);
+                    $isPastEndTime = $now->gt($jamSelesai);
+
+                    if ($isScheduledDay && $isPastEndTime) {
+                        Cache::forget('active_attendance_session');
+                        $activeSession = null;
+                    }
+                } else {
+                    Cache::forget('active_attendance_session');
+                    $activeSession = null;
+                }
+            } else {
+                // Legacy session without jadwal_id - close if any matching schedule has passed
+                $jadwal = Jadwal::query()
+                    ->where('mata_kuliah_id', $activeSession['mata_kuliah_id'])
+                    ->where('kelas_id', $activeSession['kelas_id'])
+                    ->first();
+
+                if ($jadwal) {
+                    $currentDayNames = $this->dayNames($now);
+                    $jamSelesai = Carbon::parse($jadwal->jam_selesai);
+                    $isScheduledDay = in_array($jadwal->hari, $currentDayNames);
+                    $isPastEndTime = $now->gt($jamSelesai);
+
+                    if ($isScheduledDay && $isPastEndTime) {
+                        Cache::forget('active_attendance_session');
+                        $activeSession = null;
+                    }
+                }
+            }
+        }
+
+        // Auto-open: if no active session but a schedule is currently in its time window, open it
+        if (! $activeSession) {
+            $now = now();
+            $currentTime = $now->format('H:i:s');
+            $dayNames = $this->dayNames($now);
+
+            $autoOpenJadwal = Jadwal::query()
+                ->with(['semesterAkademik', 'kelas', 'mata_kuliah'])
+                ->whereIn('hari', $dayNames)
+                ->where('jam_mulai', '<=', $currentTime)
+                ->where('jam_selesai', '>=', $currentTime)
+                ->when($user?->role !== 'admin', function ($builder) use ($user): void {
+                    $courseIds = $this->assignedCourseIds((int) ($user?->id ?? 0));
+                    if ($courseIds === []) {
+                        $builder->whereRaw('1 = 0');
+                    } else {
+                        $builder->whereIn('mata_kuliah_id', $courseIds);
+                    }
+                })
+                ->orderBy('jam_mulai')
+                ->first();
+
+            if ($autoOpenJadwal) {
+                $activeSession = [
+                    'mata_kuliah_id' => $autoOpenJadwal->mata_kuliah_id,
+                    'kelas_id' => $autoOpenJadwal->kelas_id,
+                    'jadwal_id' => $autoOpenJadwal->id,
+                    'started_at' => now()->toDateTimeString(),
+                    'user_id' => $user?->id,
+                    'source' => 'auto_schedule',
+                ];
+
+                Cache::put('active_attendance_session', $activeSession, now()->addHours(3));
+            }
+        }
+
         $query = Jadwal::with(['semesterAkademik', 'kelas', 'mata_kuliah'])
             ->when($user?->role !== 'admin', function ($builder) use ($user): void {
                 $courseIds = $this->assignedCourseIds((int) ($user?->id ?? 0));
@@ -64,6 +147,7 @@ class DosenSessionController extends Controller
             'groupedSchedules' => $groupedSchedules,
             'todayDate' => now()->toDateString(),
             'assignedCourseIds' => $assignedCourseIds,
+            'activeSession' => $activeSession,
         ]);
     }
 
@@ -98,9 +182,28 @@ class DosenSessionController extends Controller
                 ->with('error', 'Sesi hanya bisa dibuka untuk jadwal yang ditetapkan kepada dosen.');
         }
 
+        // Find the specific jadwal for today's day
+        $now = now();
+        $dayNames = $this->dayNames($now);
+        $currentTime = $now->format('H:i:s');
+
+        $targetJadwal = Jadwal::query()
+            ->where('mata_kuliah_id', $data['mata_kuliah_id'])
+            ->where('kelas_id', $data['kelas_id'])
+            ->whereIn('hari', $dayNames)
+            ->where('jam_mulai', '<=', $currentTime)
+            ->where('jam_selesai', '>=', $currentTime)
+            ->first();
+
+        // If no matching schedule for today, find any schedule for this course/class
+        if (! $targetJadwal) {
+            $targetJadwal = $jadwalQuery->first();
+        }
+
         Cache::put('active_attendance_session', [
             'mata_kuliah_id' => $data['mata_kuliah_id'],
             'kelas_id' => $data['kelas_id'],
+            'jadwal_id' => $targetJadwal?->id,
             'started_at' => now()->toDateTimeString(),
             'user_id' => $request->user()?->id,
             'source' => 'schedule',

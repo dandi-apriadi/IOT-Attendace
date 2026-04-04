@@ -20,6 +20,31 @@ class MonitoringLiveController extends Controller
         $selectedJadwalId = $request->query('jadwal_id');
         $payload = $this->buildLivePayload($selectedDate, $selectedJadwalId);
 
+        // Get active attendance session from cache
+        $activeSession = Cache::get('active_attendance_session');
+        $activeSessionInfo = null;
+
+        if ($activeSession) {
+            $jadwal = Jadwal::query()
+                ->with(['mata_kuliah:id,kode_mk,nama_mk', 'kelas:id,nama_kelas'])
+                ->where('mata_kuliah_id', $activeSession['mata_kuliah_id'])
+                ->where('kelas_id', $activeSession['kelas_id'])
+                ->first();
+
+            if ($jadwal) {
+                $activeSessionInfo = [
+                    'mata_kuliah_id' => $jadwal->mata_kuliah_id,
+                    'kelas_id' => $jadwal->kelas_id,
+                    'mk_name' => $jadwal->mata_kuliah?->nama_mk ?? 'N/A',
+                    'mk_kode' => $jadwal->mata_kuliah?->kode_mk ?? 'N/A',
+                    'kelas_name' => $jadwal->kelas?->nama_kelas ?? 'N/A',
+                    'source' => ($activeSession['source'] ?? 'manual') === 'auto_schedule' ? 'AUTO' : 'MANUAL',
+                    'started_at' => $activeSession['started_at'] ?? null,
+                    'jadwal_id' => $jadwal->id,
+                ];
+            }
+        }
+
         return view('monitoring.live', [
             'records' => $payload['records'],
             'todayTotal' => $payload['today_total'],
@@ -30,6 +55,7 @@ class MonitoringLiveController extends Controller
             'sessions' => $payload['sessions'],
             'sessionSummary' => $payload['session_summary'],
             'selectedSession' => $payload['selected_session'],
+            'activeSession' => $activeSessionInfo,
         ]);
     }
 

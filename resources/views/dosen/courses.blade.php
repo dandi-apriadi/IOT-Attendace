@@ -49,18 +49,61 @@
                             </div>
                         </div>
 
+                        @php
+                            // Check if this specific jadwal is the active session
+                            $isActiveSession = $activeSession
+                                && (
+                                    // Primary: match by jadwal_id if available
+                                    (($activeSession['jadwal_id'] ?? null) && (int) ($activeSession['jadwal_id'] ?? 0) === (int) $jadwal->id)
+                                    // Fallback: match by mata_kuliah_id and kelas_id for legacy sessions
+                                    || (
+                                        !($activeSession['jadwal_id'] ?? null)
+                                        && ($activeSession['mata_kuliah_id'] ?? null) == $jadwal->mata_kuliah_id
+                                        && ($activeSession['kelas_id'] ?? null) == $jadwal->kelas_id
+                                    )
+                                );
+
+                            $now = now();
+                            $jamMulai = \Carbon\Carbon::parse($jadwal->jam_mulai);
+                            $jamSelesai = \Carbon\Carbon::parse($jadwal->jam_selesai);
+                            $isWithinScheduleTime = $now->gte($jamMulai) && $now->lte($jamSelesai);
+                            $isToday = strtolower($now->format('l')) === strtolower($jadwal->hari)
+                                || $now->dayOfWeekIso === match($jadwal->hari) {
+                                    'Senin', 'Monday' => 1,
+                                    'Selasa', 'Tuesday' => 2,
+                                    'Rabu', 'Wednesday' => 3,
+                                    'Kamis', 'Thursday' => 4,
+                                    'Jumat', 'Friday' => 5,
+                                    'Sabtu', 'Saturday' => 6,
+                                    'Minggu', 'Sunday' => 7,
+                                    default => 0,
+                                };
+                            $shouldAutoOpen = $isToday && $isWithinScheduleTime && ! $isActiveSession;
+                        @endphp
+
                         <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:0.9rem;">
                             <a href="{{ route('dosen-schedule.detail', ['date' => $todayDate, 'mata_kuliah_id' => $jadwal->mata_kuliah_id, 'kelas_id' => $jadwal->kelas_id]) }}" class="btn-kinetic" style="text-decoration:none; padding:0.55rem 0.8rem; font-size:0.8rem; box-shadow:none;">
                                 <i class="fas fa-list-check"></i> Detail Hari Ini
                             </a>
-                            <form action="{{ route('dosen-schedule.start') }}" method="POST" style="margin:0;">
-                                @csrf
-                                <input type="hidden" name="mata_kuliah_id" value="{{ $jadwal->mata_kuliah_id }}">
-                                <input type="hidden" name="kelas_id" value="{{ $jadwal->kelas_id }}">
-                                <button type="submit" class="btn-kinetic" style="padding:0.55rem 0.8rem; font-size:0.8rem; background:#F1F5F9; color:var(--primary-dark); box-shadow:none; border:none; cursor:pointer;">
-                                    <i class="fas fa-bolt"></i> Mulai Sesi
-                                </button>
-                            </form>
+
+                            @if ($isActiveSession)
+                                <form action="{{ route('dosen-schedule.stop') }}" method="POST" style="margin:0;">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="btn-kinetic" style="padding:0.55rem 0.8rem; font-size:0.8rem; background:#BA1A1A; color:#fff; box-shadow:none; border:none; cursor:pointer;">
+                                        <i class="fas fa-stop-circle"></i> Tutup Sesi
+                                    </button>
+                                </form>
+                            @else
+                                <form action="{{ route('dosen-schedule.start') }}" method="POST" style="margin:0;">
+                                    @csrf
+                                    <input type="hidden" name="mata_kuliah_id" value="{{ $jadwal->mata_kuliah_id }}">
+                                    <input type="hidden" name="kelas_id" value="{{ $jadwal->kelas_id }}">
+                                    <button type="submit" class="btn-kinetic" style="padding:0.55rem 0.8rem; font-size:0.8rem; background:{{ $shouldAutoOpen ? '#F59E0B' : '#F1F5F9' }}; color:{{ $shouldAutoOpen ? '#fff' : 'var(--primary-dark)' }}; box-shadow:none; border:none; cursor:pointer;">
+                                        <i class="fas fa-bolt"></i> Mulai Sesi
+                                    </button>
+                                </form>
+                            @endif
                         </div>
                     </div>
                 @endforeach
