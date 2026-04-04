@@ -18,6 +18,11 @@
             "Database\\Seeders\\": "database/seeders/"
         }
     },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
     "config": {
         "optimize-autoloader": true,
         "preferred-install": "dist",
@@ -28,5 +33,9 @@
         }
     },
     "minimum-stability": "stable",
-    "prefer-stable": true
+    "prefer-stable": true,
+    "require-dev": {
+        "mockery/mockery": "^1.6",
+        "phpunit/phpunit": "10.5"
+    }
 }

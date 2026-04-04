@@ -83,6 +83,9 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::get('/master/matakuliah/{id}/edit', [MasterDataController::class, 'editMataKuliah'])->name('matakuliah.edit');
     Route::put('/master/matakuliah/{id}', [MasterDataController::class, 'updateMataKuliah'])->name('matakuliah.update');
     Route::delete('/master/matakuliah/{id}', [MasterDataController::class, 'destroyMataKuliah'])->name('matakuliah.destroy');
+    Route::get('/master/matakuliah/{id}/report', [MasterDataController::class, 'mataKuliahReport'])->name('matakuliah.report');
+    Route::get('/master/matakuliah/{id}/report/export', [MasterDataController::class, 'mataKuliahReportExport'])->name('matakuliah.report.export');
+    Route::get('/master/matakuliah/{id}/report/student/{mahasiswaId}', [MasterDataController::class, 'mataKuliahStudentDetail'])->name('matakuliah.report.student');
     Route::get('/master/kelas', [MasterDataController::class, 'kelas'])->name('kelas');
     Route::post('/master/kelas', [MasterDataController::class, 'storeKelas'])->name('kelas.store');
     Route::get('/master/kelas/{id}/edit', [MasterDataController::class, 'editKelas'])->name('kelas.edit');
@@ -93,6 +96,12 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::get('/master/jadwal/{id}/edit', [MasterDataController::class, 'editJadwal'])->name('jadwal.edit');
     Route::put('/master/jadwal/{id}', [MasterDataController::class, 'updateJadwal'])->name('jadwal.update');
     Route::delete('/master/jadwal/{id}', [MasterDataController::class, 'destroyJadwal'])->name('jadwal.destroy');
+    Route::get('/master/semester', [MasterDataController::class, 'semester'])->name('semester');
+    Route::post('/master/semester', [MasterDataController::class, 'storeSemester'])->name('semester.store');
+    Route::get('/master/semester/{id}/edit', [MasterDataController::class, 'editSemester'])->name('semester.edit');
+    Route::put('/master/semester/{id}', [MasterDataController::class, 'updateSemester'])->name('semester.update');
+    Route::delete('/master/semester/{id}', [MasterDataController::class, 'destroySemester'])->name('semester.destroy');
+    Route::post('/master/semester/{id}/set-active', [MasterDataController::class, 'setActiveSemester'])->name('semester.set-active');
     Route::get('/master/users', [UserController::class, 'index'])->name('users');
     Route::get('/master/users/create', [UserController::class, 'create'])->name('users.create');
     Route::post('/master/users', [UserController::class, 'store'])->name('users.store');

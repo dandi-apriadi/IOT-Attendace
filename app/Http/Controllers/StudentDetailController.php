@@ -334,6 +334,26 @@ class StudentDetailController extends Controller
             }
         }
 
+        // Build semester and mata kuliah lists for filter dropdowns
+        $semesterList = SemesterAkademik::orderByDesc('is_active')
+            ->orderByDesc('tanggal_mulai')
+            ->get();
+
+        // Get mata kuliah list based on selected semester
+        $mataKuliahList = collect();
+        if ($selectedSemesterId !== '') {
+            $mataKuliahList = MataKuliah::query()
+                ->whereHas('jadwal', function ($q) use ($selectedSemesterId, $mahasiswa) {
+                    $q->where('semester_akademik_id', (int) $selectedSemesterId)
+                        ->where('kelas_id', $mahasiswa->kelas_id);
+                })
+                ->orderBy('nama_mk')
+                ->get(['id', 'kode_mk', 'nama_mk', 'sks']);
+        }
+
+        // Build per-mata-kuliah attendance progress (target 16 meetings)
+        $courseProgress = $this->buildCourseProgress($mahasiswa, $selectedSemesterId, $presentStatuses, $excusedStatuses, $absentStatus);
+
         $statusFilterOptions = [
             ['value' => '', 'label' => 'Semua Status'],
             ['value' => 'present', 'label' => 'Hadir'],
@@ -368,7 +388,98 @@ class StudentDetailController extends Controller
             'quickDateRanges' => $quickDateRanges,
             'weeklyTrend' => $weeklyTrend,
             'trendInsight' => $trendInsight,
+            'semesterList' => $semesterList,
+            'mataKuliahList' => $mataKuliahList,
+            'courseProgress' => $courseProgress,
+            'selectedSemesterId' => $selectedSemesterId,
+            'selectedMataKuliahId' => $selectedMataKuliahId,
+            'selectedKelasId' => $selectedKelasId,
         ];
+    }
+
+    private function buildCourseProgress(Mahasiswa $mahasiswa, string $selectedSemesterId, array $presentStatuses, array $excusedStatuses, string $absentStatus): array
+    {
+        $targetMeetings = 16;
+
+        // Get all jadwal for this mahasiswa's kelas in selected semester
+        $jadwalQuery = \App\Models\Jadwal::query()
+            ->with(['mata_kuliah', 'semesterAkademik'])
+            ->where('kelas_id', $mahasiswa->kelas_id);
+
+        if ($selectedSemesterId !== '') {
+            $jadwalQuery->where('semester_akademik_id', (int) $selectedSemesterId);
+        }
+
+        $jadwalList = $jadwalQuery->get();
+
+        $courseProgress = [];
+
+        foreach ($jadwalList as $jadwal) {
+            $mk = $jadwal->mata_kuliah;
+            if (! $mk) {
+                continue;
+            }
+
+            $mkId = $mk->id;
+
+            // Count attendance for this mata kuliah
+            $absensiQuery = $mahasiswa->absensi()
+                ->where('jadwal_id', $jadwal->id);
+
+            $total = $absensiQuery->count();
+            $hadir = (clone $absensiQuery)->whereIn('status', $presentStatuses)->count();
+            $sakitIzin = (clone $absensiQuery)->whereIn('status', $excusedStatuses)->count();
+            $alpa = (clone $absensiQuery)->where('status', $absentStatus)->count();
+            $pending = (clone $absensiQuery)->where('status', 'Pending')->count();
+
+            $persentase = $total > 0 ? round(($hadir / $total) * 100, 1) : 0;
+            $remaining = max(0, $targetMeetings - $total);
+
+            // Determine if already found in courseProgress (same mata_kuliah can have multiple jadwal)
+            $existingKey = null;
+            foreach ($courseProgress as $key => $cp) {
+                if ($cp['mata_kuliah_id'] === $mkId) {
+                    $existingKey = $key;
+                    break;
+                }
+            }
+
+            if ($existingKey !== null) {
+                // Aggregate if same mata_kuliah appears multiple times
+                $courseProgress[$existingKey]['total'] += $total;
+                $courseProgress[$existingKey]['hadir'] += $hadir;
+                $courseProgress[$existingKey]['sakit_izin'] += $sakitIzin;
+                $courseProgress[$existingKey]['alpa'] += $alpa;
+                $courseProgress[$existingKey]['pending'] += $pending;
+                $courseProgress[$existingKey]['remaining'] = max(0, $targetMeetings - $courseProgress[$existingKey]['total']);
+                $courseProgress[$existingKey]['persentase'] = $courseProgress[$existingKey]['total'] > 0
+                    ? round(($courseProgress[$existingKey]['hadir'] / $courseProgress[$existingKey]['total']) * 100, 1)
+                    : 0;
+            } else {
+                $courseProgress[] = [
+                    'mata_kuliah_id' => $mkId,
+                    'kode_mk' => $mk->kode_mk,
+                    'nama_mk' => $mk->nama_mk,
+                    'sks' => $mk->sks,
+                    'total' => $total,
+                    'hadir' => $hadir,
+                    'sakit_izin' => $sakitIzin,
+                    'alpa' => $alpa,
+                    'pending' => $pending,
+                    'target' => $targetMeetings,
+                    'remaining' => $remaining,
+                    'persentase' => $persentase,
+                    'is_complete' => $total >= $targetMeetings,
+                    'is_warning' => $total > 0 && $persentase < 75,
+                    'is_danger' => $total > 0 && $persentase < 60,
+                ];
+            }
+        }
+
+        // Sort by nama_mk
+        usort($courseProgress, static fn ($a, $b) => strcmp($a['nama_mk'], $b['nama_mk']));
+
+        return $courseProgress;
     }
 
     private function buildWeeklyTrend($rows, array $presentStatuses): array

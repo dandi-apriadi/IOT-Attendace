@@ -31,6 +31,7 @@
                     <div class="nav-item"><a href="{{ route('mahasiswa') }}" class="nav-link {{ Route::is('mahasiswa*') || Route::is('student*') ? 'active' : '' }}"><i class="fas fa-user-graduate"></i> Mahasiswa</a></div>
                     <div class="nav-item"><a href="{{ route('matakuliah') }}" class="nav-link {{ Route::is('matakuliah*') ? 'active' : '' }}"><i class="fas fa-book"></i> Mata Kuliah</a></div>
                     <div class="nav-item"><a href="{{ route('kelas') }}" class="nav-link {{ Route::is('kelas*') ? 'active' : '' }}"><i class="fas fa-school"></i> Kelas</a></div>
+                    <div class="nav-item"><a href="{{ route('semester') }}" class="nav-link {{ Route::is('semester*') ? 'active' : '' }}"><i class="fas fa-calendar-check"></i> Semester Akademik</a></div>
                     <div class="nav-item"><a href="{{ route('jadwal') }}" class="nav-link {{ Route::is('jadwal*') ? 'active' : '' }}"><i class="fas fa-calendar-alt"></i> Jadwal</a></div>
                 @endif
 
@@ -45,6 +46,7 @@
                 
                 <div class="nav-item"><a href="{{ route('reports.index') }}" class="nav-link {{ Route::is('reports*') ? 'active' : '' }}"><i class="fas fa-file-invoice"></i> Laporan</a></div>
                 @if (auth()->user()?->role === 'admin')
+                    <div class="nav-item"><a href="{{ route('users') }}" class="nav-link {{ Route::is('users*') ? 'active' : '' }}"><i class="fas fa-users-cog"></i> Manajemen User</a></div>
                     <div class="nav-item"><a href="{{ route('audit-log') }}" class="nav-link {{ Route::is('audit-log*') ? 'active' : '' }}"><i class="fas fa-history"></i> Audit Log</a></div>
                 @endif
                 <div class="nav-item"><a href="{{ route('settings') }}" class="nav-link {{ Route::is('settings*') ? 'active' : '' }}"><i class="fas fa-cog"></i> Settings</a></div>

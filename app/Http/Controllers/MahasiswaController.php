@@ -232,6 +232,7 @@ class MahasiswaController extends Controller
         return view('master.student-detail', [
             'mahasiswa' => $mahasiswa,
             'absensiHistory' => $absensiHistory,
+            'historyQuery' => $mahasiswa->absensi()->with(['jadwal.mataKuliah']),
             'totalAbsensi' => $totalAbsensi,
             'hadirCount' => $hadirCount,
             'sabitIzinCount' => $sabitIzinCount,
@@ -239,6 +240,26 @@ class MahasiswaController extends Controller
             'persentaseHadir' => $persentaseHadir,
             'thisMonthAbsensi' => $thisMonthAbsensi,
             'thisMonthHadir' => $thisMonthHadir,
+            'hasReportContext' => false,
+            'reportBackUrl' => route('mahasiswa'),
+            'selectedSemesterLabel' => null,
+            'selectedMataKuliahLabel' => null,
+            'selectedKelasLabel' => null,
+            'selectedStartDate' => '',
+            'selectedEndDate' => '',
+            'selectedStatusFilter' => '',
+            'statusFilterOptions' => [
+                ['value' => '', 'label' => 'Semua Status'],
+                ['value' => 'present', 'label' => 'Hadir'],
+                ['value' => 'excused', 'label' => 'Sakit/Izin'],
+                ['value' => 'absent', 'label' => 'Alpa'],
+            ],
+            'filtersQuery' => [],
+            'baseFilterQuery' => ['id' => $mahasiswa->id],
+            'quickDateRanges' => [],
+            'weeklyTrend' => [],
+            'trendInsight' => ['delta' => 0.0, 'direction' => 'flat', 'text' => 'Belum ada pembanding tren.'],
+            'statusLabels' => (array) config('attendance.absensi_statuses', []),
         ]);
     }
 

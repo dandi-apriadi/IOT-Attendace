@@ -1,0 +1,238 @@
+// IoT Attendance System database schema for dbdiagram.io
+
+Enum user_role {
+  admin
+  dosen
+}
+
+Enum attendance_method {
+  RFID
+  Fingerprint
+  "Face Recognition"
+  Barcode
+}
+
+Enum attendance_status {
+  Hadir
+  Telat
+  Sakit
+  Izin
+  Alpa
+}
+
+Enum correction_state {
+  hadir
+  sakit_izin
+  alpa
+}
+
+Enum approval_state {
+  pending
+  approved
+  rejected
+}
+
+Enum capture_type {
+  rfid
+  fingerprint
+  face
+  barcode
+}
+
+Enum enrollment_status {
+  pending_device
+  capturing
+  completed
+  failed
+  cancelled
+  expired
+}
+
+Table users {
+  id bigint [pk, increment]
+  name varchar(255) [not null]
+  email varchar(191) [unique, not null]
+  password varchar(255) [not null]
+  role user_role [not null, default: 'dosen']
+  remember_token varchar(100)
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table kelas {
+  id bigint [pk, increment]
+  nama_kelas varchar(50) [unique, not null]
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table semester_akademik {
+  id bigint [pk, increment]
+  nama_semester varchar(50) [not null]
+  tahun_ajaran varchar(20) [not null]
+  tanggal_mulai date [not null]
+  tanggal_selesai date [not null]
+  is_active tinyint(1) [not null, default: 0]
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table mata_kuliah {
+  id bigint [pk, increment]
+  kode_mk varchar(20) [unique, not null]
+  nama_mk varchar(255) [not null]
+  sks int(11) [not null]
+  semester_akademik_id bigint [ref: > semester_akademik.id]
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table mahasiswa {
+  id bigint [pk, increment]
+  nim varchar(20) [unique, not null]
+  nama varchar(255) [not null]
+  kelas_id bigint [not null, ref: > kelas.id]
+  rfid_uid varchar(50) [unique]
+  fingerprint_data text
+  face_model_data text
+  barcode_id varchar(50) [unique]
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table jadwal {
+  id bigint [pk, increment]
+  kelas_id bigint [not null, ref: > kelas.id]
+  mata_kuliah_id bigint [not null, ref: > mata_kuliah.id]
+  user_id bigint [not null, ref: > users.id]
+  semester_akademik_id bigint [ref: > semester_akademik.id]
+  hari varchar(20) [not null]
+  jam_mulai time [not null]
+  jam_selesai time [not null]
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table mata_kuliah_dosen_assignments {
+  id bigint [pk, increment]
+  mata_kuliah_id bigint [unique, not null, ref: > mata_kuliah.id]
+  user_id bigint [not null, ref: > users.id]
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table absensi {
+  id bigint [pk, increment]
+  mahasiswa_id bigint [not null, ref: > mahasiswa.id]
+  jadwal_id bigint [not null, ref: > jadwal.id]
+  tanggal date [not null]
+  waktu_tap time [not null]
+  metode_absensi attendance_method [not null]
+  status attendance_status [not null, default: 'Alpa']
+  created_at timestamp
+  updated_at timestamp
+
+  indexes {
+    (mahasiswa_id, jadwal_id, tanggal) [unique, name: 'absensi_unique_mahasiswa_jadwal_tanggal']
+    tanggal [name: 'absensi_tanggal_idx']
+    (tanggal, mahasiswa_id) [name: 'absensi_tanggal_mahasiswa_idx']
+    (tanggal, jadwal_id) [name: 'absensi_tanggal_jadwal_idx']
+    (tanggal, status) [name: 'absensi_tanggal_status_idx']
+    created_at [name: 'absensi_created_at_idx']
+    (created_at, status) [name: 'absensi_created_at_status_idx']
+  }
+}
+
+Table corrections {
+  id bigint [pk, increment]
+  user_id bigint [not null, ref: > users.id]
+  mahasiswa_id bigint [not null, ref: > mahasiswa.id]
+  jadwal_id bigint [ref: > jadwal.id]
+  tanggal date [not null]
+  status_lama correction_state [not null]
+  status_baru correction_state [not null]
+  status approval_state [not null, default: 'pending']
+  alasan text [not null]
+  dokumen varchar(255)
+  approval_status approval_state [not null, default: 'pending']
+  approval_notes text
+  approved_by bigint [ref: > users.id]
+  approved_at timestamp
+  created_at timestamp
+  updated_at timestamp
+
+  indexes {
+    mahasiswa_id [name: 'corrections_mahasiswa_id_index']
+    status [name: 'corrections_status_index']
+    approval_status [name: 'corrections_approval_status_index']
+    tanggal [name: 'corrections_tanggal_index']
+    (mahasiswa_id, status) [name: 'corrections_mahasiswa_status_idx']
+  }
+}
+
+Table devices {
+  id bigint [pk, increment]
+  device_id varchar(50) [unique, not null]
+  name varchar(255)
+  token_hash varchar(255) [not null]
+  is_active tinyint(1) [not null, default: 1]
+  last_seen_at timestamp
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table device_enrollment_jobs {
+  id bigint [pk, increment]
+  mahasiswa_id bigint [not null, ref: > mahasiswa.id]
+  device_id bigint [not null, ref: > devices.id]
+  capture_type capture_type [not null]
+  status enrollment_status [not null, default: 'pending_device']
+  captured_value text
+  error_message text
+  result_payload json
+  requested_by bigint [ref: > users.id]
+  expires_at timestamp
+  started_at timestamp
+  completed_at timestamp
+  created_at timestamp
+  updated_at timestamp
+
+  indexes {
+    (device_id, status) [name: 'device_enrollment_jobs_device_id_status_index']
+    (mahasiswa_id, capture_type, status) [name: 'device_enroll_mhs_type_status_idx']
+    (expires_at, status) [name: 'device_enrollment_jobs_expires_at_status_index']
+  }
+}
+
+Table audit_logs {
+  id bigint [pk, increment]
+  user_id bigint [ref: > users.id]
+  action varchar(100) [not null]
+  description text
+  ip_address varchar(45)
+  created_at timestamp [not null]
+
+  indexes {
+    action [name: 'audit_logs_action_index']
+    created_at [name: 'audit_logs_created_at_index']
+  }
+}
+
+Table performance_metrics {
+  id bigint [pk, increment]
+  endpoint varchar(120) [not null]
+  query_duration_ms decimal(10,3) [not null]
+  total_duration_ms decimal(10,3)
+  result_count bigint [not null, default: 0]
+  page int(11) [not null, default: 1]
+  period_month varchar(7)
+  kelas_id bigint [ref: > kelas.id]
+  mata_kuliah_id bigint [ref: > mata_kuliah.id]
+  user_id bigint [ref: > users.id]
+  created_at timestamp
+  updated_at timestamp
+
+  indexes {
+    (endpoint, created_at) [name: 'perf_endpoint_created_idx']
+  }
+}

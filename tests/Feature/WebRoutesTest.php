@@ -8,6 +8,7 @@ use App\Models\Kelas;
 use App\Models\MataKuliah;
 use App\Models\Mahasiswa;
 use App\Models\Jadwal;
+use App\Models\MataKuliahDosenAssignment;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
@@ -65,6 +66,12 @@ class WebRoutesTest extends TestCase
             'hari' => 'Monday',
             'jam_mulai' => '08:00:00',
             'jam_selesai' => '10:00:00',
+        ]);
+
+        // Create assignment so dosen owns this course
+        MataKuliahDosenAssignment::create([
+            'mata_kuliah_id' => $mataKuliah->id,
+            'user_id' => $this->dosen->id,
         ]);
 
         // Create mahasiswa

@@ -15,7 +15,13 @@ class MataKuliah extends Model
         'kode_mk',
         'nama_mk',
         'sks',
+        'semester_akademik_id',
     ];
+
+    public function semesterAkademik()
+    {
+        return $this->belongsTo(SemesterAkademik::class, 'semester_akademik_id');
+    }
 
     public function jadwal()
     {

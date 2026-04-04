@@ -26,6 +26,24 @@
         </div>
     @endif
 
+    <!-- Filter Semester -->
+    <form method="GET" style="display: flex; gap: 0.75rem; align-items: flex-end; margin-bottom: 1.5rem; background: #f8fafc; padding: 1rem; border-radius: 12px;">
+        <div>
+            <label style="display:block; font-size:0.74rem; font-weight:700; margin-bottom:0.35rem; color:#6b7280; text-transform:uppercase;">Filter Semester</label>
+            <select name="semester_id" class="form-input" onchange="this.form.submit()">
+                <option value="">Semua Semester</option>
+                @foreach ($semesterList as $sem)
+                    <option value="{{ $sem->id }}" {{ $selectedSemesterId == $sem->id ? 'selected' : '' }}>
+                        {{ $sem->display_name }}
+                    </option>
+                @endforeach
+            </select>
+        </div>
+        <button type="submit" class="btn-kinetic" style="padding: 0.6rem 1.2rem;">
+            <i class="fas fa-filter"></i> Terapkan
+        </button>
+    </form>
+
     <form action="{{ route('matakuliah.store') }}" method="POST" style="display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 0.75rem; margin-bottom: 2rem; background: #f8fafc; padding: 1.5rem; border-radius: 12px;">
         @csrf
         <div class="form-group" style="margin-bottom:0;">
@@ -37,6 +55,14 @@
         <div class="form-group" style="margin-bottom:0;">
             <input name="sks" type="number" value="{{ old('sks') }}" placeholder="SKS" class="form-control" min="1" max="6" required>
         </div>
+        <div class="form-group" style="margin-bottom:0;">
+            <select name="semester_akademik_id" class="form-control">
+                <option value="">-- Pilih Semester --</option>
+                @foreach ($semesterList as $sem)
+                    <option value="{{ $sem->id }}">{{ $sem->display_name }}</option>
+                @endforeach
+            </select>
+        </div>
         <button class="btn-kinetic" type="submit"><i class="fas fa-plus"></i> Tambah MK</button>
     </form>
     
@@ -46,6 +72,7 @@
                 <th>Kode MK</th>
                 <th>Nama Mata Kuliah</th>
                 <th>SKS</th>
+                <th>Semester</th>
                 <th>Penggunaan</th>
                 <th style="text-align: right;">Aksi</th>
             </tr>
@@ -56,8 +83,20 @@
                     <td style="font-family: monospace; font-weight: 700;">{{ $mk->kode_mk }}</td>
                     <td>{{ $mk->nama_mk }}</td>
                     <td>{{ $mk->sks }} SKS</td>
+                    <td>
+                        @if ($mk->semesterAkademik)
+                            <span style="background: #E6F6EC; color: #1DB173; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600;">
+                                {{ $mk->semesterAkademik->display_name }}
+                            </span>
+                        @else
+                            <span style="color: #6b7280; font-size: 0.8rem;">Belum ditentukan</span>
+                        @endif
+                    </td>
                     <td>{{ number_format($mk->jadwal_count) }} Sesi Kuliah</td>
                     <td style="text-align: right; display: flex; gap: 0.5rem; justify-content: flex-end;">
+                        <a href="{{ route('matakuliah.report', $mk->id) }}" class="btn-kinetic" style="padding: 0.45rem 0.6rem; font-size: 0.75rem; background: #E6F6EC; color: #1DB173; box-shadow: none; text-decoration: none;" title="Lihat Report Absensi">
+                            <i class="fas fa-chart-bar"></i>
+                        </a>
                         <a href="{{ route('matakuliah.edit', $mk->id) }}" class="btn-kinetic" style="padding: 0.45rem 0.6rem; font-size: 0.75rem; background: #F1F3F5; color: var(--text-primary); box-shadow: none; text-decoration: none;">
                             <i class="fas fa-edit"></i>
                         </a>
@@ -72,7 +111,7 @@
                 </tr>
             @empty
                 <tr>
-                    <td colspan="5" style="text-align:center; color:#6b7280;">Belum ada data mata kuliah.</td>
+                    <td colspan="6" style="text-align:center; color:#6b7280;">Belum ada data mata kuliah.</td>
                 </tr>
             @endforelse
         </tbody>

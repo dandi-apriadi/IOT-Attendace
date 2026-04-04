@@ -110,13 +110,35 @@
 
     <form action="{{ route('student-detail', ['id' => $mahasiswa->id]) }}" method="GET" style="display:grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap:0.75rem; margin-bottom:1.5rem; background:#f9fafb; border:1px solid #e5e7eb; border-radius:12px; padding:0.9rem;">
         @foreach ($filtersQuery as $key => $value)
-            @if (! in_array($key, ['start_date', 'end_date', 'status_filter'], true))
+            @if (! in_array($key, ['start_date', 'end_date', 'status_filter', 'semester_id', 'mata_kuliah_id'], true))
                 <input type="hidden" name="{{ $key }}" value="{{ $value }}">
             @endif
         @endforeach
         @if ($hasReportContext)
             <input type="hidden" name="from" value="reports">
         @endif
+        <div>
+            <label style="display:block; font-size:0.74rem; font-weight:700; margin-bottom:0.35rem; color:#6b7280; text-transform:uppercase;">Semester</label>
+            <select name="semester_id" class="form-input" onchange="this.form.submit()">
+                <option value="">Semua Semester</option>
+                @foreach ($semesterList as $sem)
+                    <option value="{{ $sem->id }}" {{ $selectedSemesterId == $sem->id ? 'selected' : '' }}>
+                        {{ $sem->display_name }}
+                    </option>
+                @endforeach
+            </select>
+        </div>
+        <div>
+            <label style="display:block; font-size:0.74rem; font-weight:700; margin-bottom:0.35rem; color:#6b7280; text-transform:uppercase;">Mata Kuliah</label>
+            <select name="mata_kuliah_id" class="form-input">
+                <option value="">Semua Mata Kuliah</option>
+                @foreach ($mataKuliahList as $mk)
+                    <option value="{{ $mk->id }}" {{ $selectedMataKuliahId == $mk->id ? 'selected' : '' }}>
+                        {{ $mk->kode_mk }} - {{ $mk->nama_mk }}
+                    </option>
+                @endforeach
+            </select>
+        </div>
         <div>
             <label style="display:block; font-size:0.74rem; font-weight:700; margin-bottom:0.35rem; color:#6b7280; text-transform:uppercase;">Status</label>
             <select name="status_filter" class="form-input">
@@ -223,6 +245,70 @@
             <div style="font-size: 1.5rem; font-weight: 800; color: #0066CC;">{{ $totalAbsensi }}</div>
         </div>
     </div>
+
+    <!-- Progress Kehadiran Per Mata Kuliah (Target 16 Pertemuan) -->
+    @if (! empty($courseProgress))
+        <h4 class="display-font" style="margin-bottom: 1rem; margin-top: 2rem; font-size: 1.1rem; color: var(--primary-blue-container);">
+            <i class="fas fa-tasks"></i> Progress Kehadiran Per Mata Kuliah (Target: 16 Pertemuan)
+        </h4>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+            @foreach ($courseProgress as $course)
+                @php
+                    $progressPercent = $course['target'] > 0 ? min(100, round(($course['total'] / $course['target']) * 100, 1)) : 0;
+                    $barColor = $course['is_danger'] ? '#BA1A1A' : ($course['is_warning'] ? '#F59E0B' : '#1DB173');
+                    $bgColor = $course['is_danger'] ? '#FADBD8' : ($course['is_warning'] ? '#FEF3C7' : '#E6F6EC');
+                    $textColor = $course['is_danger'] ? '#BA1A1A' : ($course['is_warning'] ? '#92400E' : '#1DB173');
+                @endphp
+                <div style="background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 1rem; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+                        <div>
+                            <div style="font-weight: 700; font-size: 0.9rem; color: #111827;">{{ $course['nama_mk'] }}</div>
+                            <div style="font-size: 0.75rem; color: #6b7280; font-family: monospace;">{{ $course['kode_mk'] }} · {{ $course['sks'] }} SKS</div>
+                        </div>
+                        <span style="background: {{ $bgColor }}; color: {{ $textColor }}; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700;">
+                            {{ $course['total'] }}/{{ $course['target'] }}
+                        </span>
+                    </div>
+
+                    <!-- Progress Bar -->
+                    <div style="background: #e5e7eb; border-radius: 999px; height: 8px; margin-bottom: 0.75rem; overflow: hidden;">
+                        <div style="background: {{ $barColor }}; height: 100%; width: {{ $progressPercent }}%; border-radius: 999px; transition: width 0.3s;"></div>
+                    </div>
+
+                    <!-- Stats Row -->
+                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; font-size: 0.72rem;">
+                        <div style="text-align: center;">
+                            <div style="color: #1DB173; font-weight: 700;">{{ $course['hadir'] }}</div>
+                            <div style="color: #6b7280;">Hadir</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="color: #F59E0B; font-weight: 700;">{{ $course['sakit_izin'] }}</div>
+                            <div style="color: #6b7280;">S/I</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="color: #BA1A1A; font-weight: 700;">{{ $course['alpa'] }}</div>
+                            <div style="color: #6b7280;">Alpa</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="color: #0066CC; font-weight: 700;">{{ $course['persentase'] }}%</div>
+                            <div style="color: #6b7280;">%</div>
+                        </div>
+                    </div>
+
+                    @if ($course['remaining'] > 0)
+                        <div style="margin-top: 0.5rem; font-size: 0.7rem; color: #6b7280; text-align: center;">
+                            Sisa {{ $course['remaining'] }} pertemuan lagi
+                        </div>
+                    @else
+                        <div style="margin-top: 0.5rem; font-size: 0.7rem; color: #1DB173; font-weight: 700; text-align: center;">
+                            ✓ Target tercapai
+                        </div>
+                    @endif
+                </div>
+            @endforeach
+        </div>
+    @endif
 
     <!-- Attendance History -->
     <h4 class="display-font" style="margin-bottom: 1rem; margin-top: 2rem;">Riwayat Absensi</h4>
