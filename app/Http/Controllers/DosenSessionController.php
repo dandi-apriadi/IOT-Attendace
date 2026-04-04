@@ -347,10 +347,10 @@ class DosenSessionController extends Controller
         $date = Carbon::parse($selectedDate);
         $dayNames = $this->dayNames($date);
 
+        // Find jadwal by mata_kuliah and kelas, prioritizing today's day but falling back to any day
         $jadwalQuery = Jadwal::query()
             ->where('kelas_id', $kelas->id)
-            ->where('mata_kuliah_id', $mataKuliah->id)
-            ->whereIn('hari', $dayNames);
+            ->where('mata_kuliah_id', $mataKuliah->id);
 
         if ($currentUser?->role !== 'admin') {
             $isOwner = MataKuliahDosenAssignment::query()
@@ -365,15 +365,19 @@ class DosenSessionController extends Controller
             }
         }
 
-        $jadwalIds = $jadwalQuery
-            ->pluck('id')
-            ->values();
+        // Try to find jadwal matching today's day first
+        $jadwalForDay = (clone $jadwalQuery)->whereIn('hari', $dayNames)->first();
+        
+        // If no match for today's day, use any jadwal for this course/class
+        $targetJadwal = $jadwalForDay ?? $jadwalQuery->first();
 
-        if ($jadwalIds->isEmpty()) {
+        if (! $targetJadwal) {
             return [
-                'redirect' => redirect()->route('dosen-courses')->with('error', 'Anda tidak memiliki akses ke mata kuliah/kelas ini.'),
+                'redirect' => redirect()->route('dosen-courses')->with('error', 'Jadwal tidak ditemukan untuk mata kuliah/kelas ini.'),
             ];
         }
+
+        $jadwalIds = collect([$targetJadwal->id]);
 
         $students = Mahasiswa::query()
             ->where('kelas_id', $kelas->id)
