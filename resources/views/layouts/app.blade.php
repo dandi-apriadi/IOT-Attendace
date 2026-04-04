@@ -37,8 +37,7 @@
 
                 <div style="margin: 1.5rem 0 0.5rem 1rem; font-size: 0.75rem; opacity: 0.5; text-transform: uppercase; letter-spacing: 0.1em;">Operational</div>
                 
-                <div class="nav-item"><a href="{{ route('dosen-courses') }}" class="nav-link {{ Route::is('dosen-courses*') && !Route::is('dosen-schedule*') ? 'active' : '' }}"><i class="fas fa-layer-group"></i> Mata Kuliah Saya</a></div>
-                <div class="nav-item"><a href="{{ route('dosen-schedule.detail') }}" class="nav-link {{ Route::is('dosen-schedule*') ? 'active' : '' }}"><i class="fas fa-play-circle"></i> Buka Sesi Jadwal</a></div>
+                <div class="nav-item"><a href="{{ route('dosen-courses') }}" class="nav-link {{ Route::is('dosen-courses*') ? 'active' : '' }}"><i class="fas fa-layer-group"></i> Mata Kuliah Saya</a></div>
                 <div class="nav-item"><a href="{{ route('monitoring') }}" class="nav-link {{ Route::is('monitoring*') ? 'active' : '' }}"><i class="fas fa-tv"></i> Live Monitoring</a></div>
                 <div class="nav-item"><a href="{{ route('iot-health') }}" class="nav-link {{ Route::is('iot-health*') ? 'active' : '' }}"><i class="fas fa-server"></i> IoT Status</a></div>
 
