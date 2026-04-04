@@ -10,6 +10,7 @@ use App\Models\Jadwal;
 use App\Models\User;
 use App\Models\Device;
 use App\Models\Absensi;
+use App\Models\SemesterAkademik;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
@@ -49,6 +50,15 @@ class ApiTest extends TestCase
             'sks' => 3,
         ]);
 
+        // Create semester akademik aktif yang mencakup tanggal tes
+        $semester = SemesterAkademik::create([
+            'nama_semester' => 'Genap',
+            'tahun_ajaran' => '2025/2026',
+            'tanggal_mulai' => Carbon::now()->copy()->subMonth()->toDateString(),
+            'tanggal_selesai' => Carbon::now()->copy()->addMonth()->toDateString(),
+            'is_active' => true,
+        ]);
+
         // Create dosen
         $dosen = User::create([
             'name' => 'Drs. Ahmad Wijaya',
@@ -73,6 +83,7 @@ class ApiTest extends TestCase
             'kelas_id' => $kelas->id,
             'mata_kuliah_id' => $mataKuliah->id,
             'user_id' => $dosen->id,
+            'semester_akademik_id' => $semester->id,
             'hari' => $dayName,
             'jam_mulai' => $now->copy()->subHours(1)->format('H:i:s'),
             'jam_selesai' => $now->copy()->addHours(2)->format('H:i:s'),
@@ -301,5 +312,42 @@ class ApiTest extends TestCase
                          ->count();
 
         $this->assertEquals(1, $count);
+    }
+
+    /**
+     * Test batas maksimal 16 pertemuan per mata kuliah
+     */
+    public function test_api_absensi_menolak_pertemuan_ke_17()
+    {
+        $mahasiswa = Mahasiswa::where('rfid_uid', 'RFID123456')->first();
+        $jadwal = Jadwal::first();
+        $now = Carbon::now();
+
+        for ($i = 1; $i <= 16; $i++) {
+            Absensi::create([
+                'mahasiswa_id' => $mahasiswa->id,
+                'jadwal_id' => $jadwal->id,
+                'tanggal' => $now->copy()->subDays($i)->toDateString(),
+                'waktu_tap' => '08:00:00',
+                'metode_absensi' => 'RFID',
+                'status' => 'Hadir',
+            ]);
+        }
+
+        $response = $this->postJson('/api/absensi', [
+            'identifier' => 'RFID123456',
+            'type' => 'RFID',
+        ], [
+            'X-Device-Token' => $this->deviceToken,
+            'X-Device-Id' => $this->deviceId,
+        ]);
+
+        $response->assertStatus(422);
+
+        $count = Absensi::where('mahasiswa_id', $mahasiswa->id)
+            ->where('jadwal_id', $jadwal->id)
+            ->count();
+
+        $this->assertEquals(16, $count);
     }
 }

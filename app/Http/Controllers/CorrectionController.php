@@ -7,13 +7,17 @@ use App\Models\Correction;
 use App\Models\Jadwal;
 use App\Models\Mahasiswa;
 use App\Services\AuditLogger;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\DB;
 
 class CorrectionController extends Controller
 {
+    private const MAX_MEETINGS_PER_COURSE = 16;
+
     public function index(Request $request): View
     {
         $approvalStatusOptions = (array) config('attendance.correction_approval_statuses', []);
@@ -168,28 +172,64 @@ class CorrectionController extends Controller
     {
         $statusAbsensi = $this->mapCorrectionStatusToAbsensi($correction->status_baru);
 
-        $existingAbsensi = Absensi::query()
-            ->where('mahasiswa_id', $correction->mahasiswa_id)
-            ->where('jadwal_id', $correction->jadwal_id)
-            ->whereDate('tanggal', $correction->tanggal)
-            ->first();
+        $jadwal = Jadwal::query()
+            ->with('semesterAkademik')
+            ->find($correction->jadwal_id);
 
-        if ($existingAbsensi) {
-            $existingAbsensi->update([
-                'status' => $statusAbsensi,
-            ]);
-
+        if (! $jadwal || ! $jadwal->semesterAkademik) {
             return;
         }
 
-        Absensi::create([
-            'mahasiswa_id' => $correction->mahasiswa_id,
-            'jadwal_id' => $correction->jadwal_id,
-            'tanggal' => $correction->tanggal->format('Y-m-d'),
-            'waktu_tap' => now()->format('H:i:s'),
-            'metode_absensi' => 'Barcode',
-            'status' => $statusAbsensi,
-        ]);
+        $correctionDate = Carbon::parse($correction->tanggal)->toDateString();
+        $semesterStart = Carbon::parse($jadwal->semesterAkademik->tanggal_mulai)->startOfDay();
+        $semesterEnd = Carbon::parse($jadwal->semesterAkademik->tanggal_selesai)->endOfDay();
+
+        if (Carbon::parse($correctionDate)->lt($semesterStart) || Carbon::parse($correctionDate)->gt($semesterEnd)) {
+            return;
+        }
+
+        $courseJadwalIds = Jadwal::query()
+            ->where('kelas_id', $jadwal->kelas_id)
+            ->where('mata_kuliah_id', $jadwal->mata_kuliah_id)
+            ->where('semester_akademik_id', $jadwal->semester_akademik_id)
+            ->pluck('id');
+
+        if ($courseJadwalIds->isEmpty()) {
+            return;
+        }
+
+        DB::transaction(function () use ($correction, $courseJadwalIds, $correctionDate, $statusAbsensi): void {
+            $courseAttendanceQuery = Absensi::query()
+                ->where('mahasiswa_id', $correction->mahasiswa_id)
+                ->whereIn('jadwal_id', $courseJadwalIds)
+                ->lockForUpdate();
+
+            $existingAbsensi = (clone $courseAttendanceQuery)
+                ->where('jadwal_id', $correction->jadwal_id)
+                ->whereDate('tanggal', $correctionDate)
+                ->first();
+
+            if (! $existingAbsensi && (clone $courseAttendanceQuery)->count() >= self::MAX_MEETINGS_PER_COURSE) {
+                return;
+            }
+
+            if ($existingAbsensi) {
+                $existingAbsensi->update([
+                    'status' => $statusAbsensi,
+                ]);
+
+                return;
+            }
+
+            Absensi::create([
+                'mahasiswa_id' => $correction->mahasiswa_id,
+                'jadwal_id' => $correction->jadwal_id,
+                'tanggal' => $correctionDate,
+                'waktu_tap' => now()->format('H:i:s'),
+                'metode_absensi' => 'Barcode',
+                'status' => $statusAbsensi,
+            ]);
+        });
     }
 
     private function mapCorrectionStatusToAbsensi(string $status): string
