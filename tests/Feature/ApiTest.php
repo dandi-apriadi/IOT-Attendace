@@ -278,7 +278,7 @@ class ApiTest extends TestCase
         
         $this->assertNotNull($absensi);
         $this->assertEquals('RFID', $absensi->metode_absensi);
-        $this->assertIn($absensi->status, ['Hadir', 'Telat']);
+        $this->assertContains($absensi->status, ['Hadir', 'Telat']);
     }
 
     /**
