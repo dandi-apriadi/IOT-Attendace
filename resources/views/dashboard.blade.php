@@ -6,14 +6,6 @@
 @endsection
 
 @section('content')
-<div id="dashboard-chart-data"
-    data-admin-weekly='{{ e(json_encode($adminWeeklyChart ?? ["labels" => [], "data" => []])) }}'
-    data-admin-iot='{{ e(json_encode($adminIotChart ?? ["labels" => [], "data" => []])) }}'
-    data-dosen-class='{{ e(json_encode($dosenClassChart ?? ["labels" => [], "data" => []])) }}'
-    data-dosen-course='{{ e(json_encode($dosenCourseChart ?? ["labels" => [], "data" => []])) }}'
-    style="display:none;">
-</div>
-
 <div class="stats-grid">
     <div class="glass-card" style="border-left: 4px solid var(--kinetic-yellow);">
         <div style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase;">Kehadiran Hari Ini</div>
@@ -191,21 +183,58 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const chartDataNode = document.getElementById('dashboard-chart-data');
-    const adminWeeklyChart = chartDataNode ? JSON.parse(chartDataNode.dataset.adminWeekly || '{"labels":[],"data":[]}') : { labels: [], data: [] };
-    const adminIotChart = chartDataNode ? JSON.parse(chartDataNode.dataset.adminIot || '{"labels":[],"data":[]}') : { labels: [], data: [] };
-    const dosenClassChart = chartDataNode ? JSON.parse(chartDataNode.dataset.dosenClass || '{"labels":[],"data":[]}') : { labels: [], data: [] };
-    const dosenCourseChart = chartDataNode ? JSON.parse(chartDataNode.dataset.dosenCourse || '{"labels":[],"data":[]}') : { labels: [], data: [] };
+    const adminWeeklyChart = @json($adminWeeklyChart ?? ['labels' => [], 'data' => []]);
+    const adminIotChart = @json($adminIotChart ?? ['labels' => [], 'data' => []]);
+    const dosenClassChart = @json($dosenClassChart ?? ['labels' => [], 'data' => []]);
+    const dosenCourseChart = @json($dosenCourseChart ?? ['labels' => [], 'data' => []]);
+
+    const isChartLibReady = typeof Chart !== 'undefined';
+
+    function normalizeChartPayload(payload) {
+        if (!payload || typeof payload !== 'object') {
+            return { labels: [], data: [] };
+        }
+
+        const labels = Array.isArray(payload.labels) ? payload.labels : [];
+        const data = Array.isArray(payload.data) ? payload.data : [];
+
+        return {
+            labels,
+            data,
+        };
+    }
+
+    function renderChartUnavailable(canvasId, message) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas || !canvas.parentElement) {
+            return;
+        }
+
+        canvas.parentElement.innerHTML = '<div style="height:100%;display:flex;align-items:center;justify-content:center;color:#6b7280;font-size:0.9rem;font-weight:600;">' + message + '</div>';
+    }
+
+    if (!isChartLibReady) {
+        renderChartUnavailable('campusTrendsChart', 'Chart.js gagal dimuat.');
+        renderChartUnavailable('iotHealthChart', 'Chart.js gagal dimuat.');
+        renderChartUnavailable('classParticipationChart', 'Chart.js gagal dimuat.');
+        renderChartUnavailable('coursePerformanceChart', 'Chart.js gagal dimuat.');
+        return;
+    }
+
+    const safeAdminWeekly = normalizeChartPayload(adminWeeklyChart);
+    const safeAdminIot = normalizeChartPayload(adminIotChart);
+    const safeDosenClass = normalizeChartPayload(dosenClassChart);
+    const safeDosenCourse = normalizeChartPayload(dosenCourseChart);
 
     const ctxTrends = document.getElementById('campusTrendsChart');
     if (ctxTrends) {
         new Chart(ctxTrends, {
             type: 'line',
             data: {
-                labels: adminWeeklyChart.labels,
+                labels: safeAdminWeekly.labels,
                 datasets: [{
                     label: 'Total Kehadiran',
-                    data: adminWeeklyChart.data,
+                    data: safeAdminWeekly.data,
                     borderColor: '#1DB173',
                     backgroundColor: 'rgba(29, 177, 115, 0.1)',
                     borderWidth: 3,
@@ -234,9 +263,9 @@ document.addEventListener('DOMContentLoaded', function() {
         new Chart(ctxIot, {
             type: 'doughnut',
             data: {
-                labels: adminIotChart.labels,
+                labels: safeAdminIot.labels,
                 datasets: [{
-                    data: adminIotChart.data,
+                    data: safeAdminIot.data,
                     backgroundColor: ['#1DB173', '#BA1A1A', '#F59E0B'],
                     borderWidth: 0,
                     hoverOffset: 10
@@ -258,10 +287,10 @@ document.addEventListener('DOMContentLoaded', function() {
         new Chart(ctxParticipation, {
             type: 'bar',
             data: {
-                labels: dosenClassChart.labels,
+                labels: safeDosenClass.labels,
                 datasets: [{
                     label: '% Kehadiran',
-                    data: dosenClassChart.data,
+                    data: safeDosenClass.data,
                     backgroundColor: 'rgba(0, 102, 204, 0.8)',
                     borderRadius: 8
                 }]
@@ -285,10 +314,10 @@ document.addEventListener('DOMContentLoaded', function() {
         new Chart(ctxCourse, {
             type: 'radar',
             data: {
-                labels: dosenCourseChart.labels,
+                labels: safeDosenCourse.labels,
                 datasets: [{
                     label: 'Performa Rata-rata',
-                    data: dosenCourseChart.data,
+                    data: safeDosenCourse.data,
                     borderColor: '#0066CC',
                     backgroundColor: 'rgba(0, 102, 204, 0.2)',
                     fill: true

@@ -93,16 +93,8 @@ class MonitoringLiveController extends Controller
 
     private function getIndoDayName(Carbon $date): string
     {
-        return match ($date->dayOfWeekIso) {
-            1 => 'Senin',
-            2 => 'Selasa',
-            3 => 'Rabu',
-            4 => 'Kamis',
-            5 => 'Jumat',
-            6 => 'Sabtu',
-            7 => 'Minggu',
-            default => $date->format('l'),
-        };
+        // Database stores English day names (Monday, Tuesday, etc.)
+        return $date->format('l');
     }
 
     private function normalizeDate(string $date): string
