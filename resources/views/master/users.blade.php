@@ -46,7 +46,7 @@
                         </span>
                     </td>
                     <td style="padding: 1rem 0; text-align: center; color: #6b7280; font-size: 0.85rem;">
-                        {{ $user->created_at->format('d M Y') }}
+                        {{ $user->created_at ? $user->created_at->format('d M Y') : '-' }}
                     </td>
                     <td style="padding: 1rem 0; text-align: center;">
                         <div style="display: flex; gap: 0.5rem; justify-content: center;">
