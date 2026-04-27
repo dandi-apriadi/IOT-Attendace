@@ -15,19 +15,21 @@ class AcademicDemoSeeder extends Seeder
     public function run(): void
     {
         $admin = User::updateOrCreate(
-            ['email' => 'admin@admin.com'],
+            ['role' => 'admin'],
             [
                 'name' => 'Super Admin',
-                'password' => bcrypt('password'),
+                'email' => 'admin@gmail.com',
+                'password' => '123',
                 'role' => 'admin',
             ]
         );
 
         $dosen = User::updateOrCreate(
-            ['email' => 'dosen@admin.com'],
+            ['role' => 'dosen'],
             [
                 'name' => 'Dosen Utama',
-                'password' => bcrypt('password'),
+                'email' => 'dosen@gmail.com',
+                'password' => '123',
                 'role' => 'dosen',
             ]
         );

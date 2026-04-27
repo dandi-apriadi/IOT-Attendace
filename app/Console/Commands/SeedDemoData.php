@@ -12,7 +12,6 @@ use App\Models\SemesterAkademik;
 use App\Models\User;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Carbon\Carbon;
 
 class SeedDemoData extends Command
@@ -55,7 +54,7 @@ class SeedDemoData extends Command
         MataKuliah::truncate();
         Kelas::truncate();
         SemesterAkademik::truncate();
-        User::where('email', '!=', 'admin@iot-attendance.test')->delete();
+        User::truncate();
         DB::statement('SET FOREIGN_KEY_CHECKS=1;');
         $this->info('✅ Database cleaned.');
 
@@ -134,21 +133,22 @@ class SeedDemoData extends Command
 
         // Admin
         User::updateOrCreate(
-            ['email' => 'admin@iot-attendance.test'],
+            ['email' => 'admin@gmail.com'],
             [
                 'name' => 'Administrator',
-                'password' => Hash::make('password123'),
+                'email' => 'admin@gmail.com',
+                'password' => '123',
                 'role' => 'admin',
             ]
         );
 
         // Dosen
         $dosenList = [
-            ['name' => 'Dr. Budi Santoso, M.Kom.', 'email' => 'budi.santoso@iot-attendance.test'],
-            ['name' => 'Siti Rahayu, M.T.', 'email' => 'siti.rahayu@iot-attendance.test'],
-            ['name' => 'Ahmad Fauzi, Ph.D.', 'email' => 'ahmad.fauzi@iot-attendance.test'],
-            ['name' => 'Dewi Lestari, M.Cs.', 'email' => 'dewi.lestari@iot-attendance.test'],
-            ['name' => 'Rudi Hermawan, M.Kom.', 'email' => 'rudi.hermawan@iot-attendance.test'],
+            ['name' => 'Dr. Budi Santoso, M.Kom.', 'email' => 'dosen1@gmail.com'],
+            ['name' => 'Siti Rahayu, M.T.', 'email' => 'dosen2@gmail.com'],
+            ['name' => 'Ahmad Fauzi, Ph.D.', 'email' => 'dosen3@gmail.com'],
+            ['name' => 'Dewi Lestari, M.Cs.', 'email' => 'dosen4@gmail.com'],
+            ['name' => 'Rudi Hermawan, M.Kom.', 'email' => 'dosen5@gmail.com'],
         ];
 
         foreach ($dosenList as $dosen) {
@@ -156,7 +156,7 @@ class SeedDemoData extends Command
                 ['email' => $dosen['email']],
                 [
                     'name' => $dosen['name'],
-                    'password' => Hash::make('password123'),
+                    'password' => '123',
                     'role' => 'dosen',
                 ]
             );

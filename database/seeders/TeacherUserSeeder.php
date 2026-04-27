@@ -4,17 +4,17 @@ namespace Database\Seeders;
 
 use App\Models\User;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\Hash;
 
 class TeacherUserSeeder extends Seeder
 {
     public function run(): void
     {
         User::updateOrCreate(
-            ['email' => 'dosen@admin.com'],
+            ['role' => 'dosen'],
             [
                 'name' => 'Dosen Utama',
-                'password' => Hash::make('password'),
+                'email' => 'dosen@gmail.com',
+                'password' => '123',
                 'role' => 'dosen',
             ]
         );
