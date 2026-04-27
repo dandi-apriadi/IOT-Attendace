@@ -1,0 +1,29 @@
+{
+    "intelephense.diagnostics.undefinedMethods": false,
+    "intelephense.diagnostics.undefinedTypes": false,
+    "intelephense.diagnostics.undefinedProperties": false,
+    "html.validate.scripts": false,
+    "html.validate.styles": false,
+    "css.validate": false,
+    "scss.validate": false,
+    "less.validate": false,
+    "javascript.validate.enable": false,
+    "[blade]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.quickSuggestions": {
+            "other": true,
+            "comments": false,
+            "strings": true
+        },
+        "css.validate": false,
+        "scss.validate": false,
+        "less.validate": false,
+        "javascript.validate.enable": false
+    },
+    "files.associations": {
+        "*.blade.php": "blade"
+    },
+    "emmet.includeLanguages": {
+        "blade": "html"
+    }
+}
