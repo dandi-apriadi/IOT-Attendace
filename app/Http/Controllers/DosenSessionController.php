@@ -365,16 +365,19 @@ class DosenSessionController extends Controller
             }
         }
 
-        // Get all jadwal IDs for this course and class.
-        // This ensures attendance records are fetched regardless of which specific 
-        // day/session they were recorded under (fixes sync issue with Live Monitoring).
-        $jadwalIds = $jadwalQuery->pluck('id');
+        // Try to find jadwal matching today's day first
+        $jadwalForDay = (clone $jadwalQuery)->whereIn('hari', $dayNames)->first();
+        
+        // If no match for today's day, use any jadwal for this course/class
+        $targetJadwal = $jadwalForDay ?? $jadwalQuery->first();
 
-        if ($jadwalIds->isEmpty()) {
+        if (! $targetJadwal) {
             return [
                 'redirect' => redirect()->route('dosen-courses')->with('error', 'Jadwal tidak ditemukan untuk mata kuliah/kelas ini.'),
             ];
         }
+
+        $jadwalIds = collect([$targetJadwal->id]);
 
         $students = Mahasiswa::query()
             ->where('kelas_id', $kelas->id)

@@ -14,6 +14,7 @@ class Device extends Model
     protected $fillable = [
         'device_id',
         'name',
+        'ip_address',
         'token_hash',
         'is_active',
         'last_seen_at',

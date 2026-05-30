@@ -109,6 +109,13 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::put('/master/users/{user}', [UserController::class, 'update'])->name('users.update');
     Route::delete('/master/users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
     Route::post('/master/users/{user}/reset-password', [UserController::class, 'resetPassword'])->name('users.reset-password');
+    
+    // Perangkat IoT
+    Route::get('/master/devices', [\App\Http\Controllers\DeviceController::class, 'index'])->name('devices.index');
+    Route::post('/master/devices', [\App\Http\Controllers\DeviceController::class, 'store'])->name('devices.store');
+    Route::get('/master/devices/{device}/edit', [\App\Http\Controllers\DeviceController::class, 'edit'])->name('devices.edit');
+    Route::put('/master/devices/{device}', [\App\Http\Controllers\DeviceController::class, 'update'])->name('devices.update');
+    Route::delete('/master/devices/{device}', [\App\Http\Controllers\DeviceController::class, 'destroy'])->name('devices.destroy');
 
     // Admin Reports
     Route::get('/reports/audit', [AuditLogController::class, 'index'])->name('audit-log');

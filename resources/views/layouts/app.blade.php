@@ -33,6 +33,7 @@
                     <div class="nav-item"><a href="{{ route('kelas') }}" class="nav-link {{ Route::is('kelas*') ? 'active' : '' }}"><i class="fas fa-school"></i> Kelas</a></div>
                     <div class="nav-item"><a href="{{ route('semester') }}" class="nav-link {{ Route::is('semester*') ? 'active' : '' }}"><i class="fas fa-calendar-check"></i> Semester Akademik</a></div>
                     <div class="nav-item"><a href="{{ route('jadwal') }}" class="nav-link {{ Route::is('jadwal*') ? 'active' : '' }}"><i class="fas fa-calendar-alt"></i> Jadwal</a></div>
+                    <div class="nav-item"><a href="{{ route('devices.index') }}" class="nav-link {{ Route::is('devices*') ? 'active' : '' }}"><i class="fas fa-microchip"></i> Perangkat IoT</a></div>
                 @endif
 
                 <div style="margin: 1.5rem 0 0.5rem 1rem; font-size: 0.75rem; opacity: 0.5; text-transform: uppercase; letter-spacing: 0.1em;">Operational</div>
