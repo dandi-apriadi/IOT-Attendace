@@ -12,17 +12,24 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('devices', function (Blueprint $table) {
-            $table->string('ip_address')->nullable()->after('name');
+            $table->string('type')->default('custom_iot')->after('name'); // 'custom_iot' or 'zkteco'
+            $table->string('ip_address')->nullable()->after('type');
+            $table->integer('port')->nullable()->after('ip_address');
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::table('devices', function (Blueprint $table) {
-            $table->dropColumn('ip_address');
+            if (Schema::hasColumn('devices', 'type')) {
+                $table->dropColumn('type');
+            }
+            if (Schema::hasColumn('devices', 'ip_address')) {
+                $table->dropColumn('ip_address');
+            }
+            if (Schema::hasColumn('devices', 'port')) {
+                $table->dropColumn('port');
+            }
         });
     }
 };

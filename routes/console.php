@@ -10,3 +10,8 @@ Artisan::command('inspire', function () {
 Schedule::command('backup:database-local --keep=7')
     ->dailyAt('23:30')
     ->withoutOverlapping();
+
+Schedule::command('zkteco:pull')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/zkteco-pull.log'));
