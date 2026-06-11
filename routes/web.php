@@ -117,6 +117,17 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::put('/master/devices/{device}', [\App\Http\Controllers\DeviceController::class, 'update'])->name('devices.update');
     Route::delete('/master/devices/{device}', [\App\Http\Controllers\DeviceController::class, 'destroy'])->name('devices.destroy');
 
+    // Operasi ZKTeco (X609) — komunikasi dua arah ke alat
+    Route::post('/master/devices/{device}/test', [\App\Http\Controllers\DeviceController::class, 'testConnection'])->name('devices.test');
+    Route::get('/master/devices/{device}/info', [\App\Http\Controllers\DeviceController::class, 'info'])->name('devices.info');
+    Route::post('/master/devices/{device}/sync-users', [\App\Http\Controllers\DeviceController::class, 'syncUsers'])->name('devices.sync-users');
+    Route::get('/master/devices/{device}/users', [\App\Http\Controllers\DeviceController::class, 'users'])->name('devices.users');
+    Route::post('/master/devices/{device}/import-users', [\App\Http\Controllers\DeviceController::class, 'importUsers'])->name('devices.import-users');
+    Route::post('/master/devices/{device}/pull-attendance', [\App\Http\Controllers\DeviceController::class, 'pullAttendance'])->name('devices.pull-attendance');
+    Route::post('/master/devices/{device}/remove-user', [\App\Http\Controllers\DeviceController::class, 'removeUser'])->name('devices.remove-user');
+    Route::post('/master/devices/{device}/clear-attendance', [\App\Http\Controllers\DeviceController::class, 'clearAttendance'])->name('devices.clear-attendance');
+    Route::post('/master/devices/{device}/sync-time', [\App\Http\Controllers\DeviceController::class, 'syncTime'])->name('devices.sync-time');
+
     // Admin Reports
     Route::get('/reports/audit', [AuditLogController::class, 'index'])->name('audit-log');
     Route::get('/reports/correction', [CorrectionController::class, 'index'])->name('correction');

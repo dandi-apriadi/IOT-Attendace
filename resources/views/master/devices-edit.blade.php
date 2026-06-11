@@ -40,15 +40,30 @@
         </div>
 
         <div style="margin-bottom: 1rem;">
+            <label class="form-label">Tipe Perangkat</label>
+            <select name="type" class="form-control" required>
+                <option value="custom_iot" {{ old('type', $device->type) === 'custom_iot' ? 'selected' : '' }}>Custom IoT (HTTP)</option>
+                <option value="zkteco" {{ old('type', $device->type) === 'zkteco' ? 'selected' : '' }}>ZKTeco (mis. Solution X609)</option>
+            </select>
+            <small style="color: #6b7280; font-size: 0.75rem;">ZKTeco terhubung langsung via IP/port (UDP). Custom IoT memakai HTTP + token.</small>
+        </div>
+
+        <div style="margin-bottom: 1rem;">
             <label class="form-label">IP Address</label>
             <input type="text" name="ip_address" class="form-control" value="{{ old('ip_address', $device->ip_address) }}">
-            <small style="color: #6b7280; font-size: 0.75rem;">Opsional. IP address perangkat di jaringan lokal.</small>
+            <small style="color: #6b7280; font-size: 0.75rem;">Opsional. IP address perangkat di jaringan lokal (mis. 192.168.0.10).</small>
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+            <label class="form-label">Port</label>
+            <input type="number" name="port" class="form-control" value="{{ old('port', $device->port) }}" placeholder="ZKTeco default: 4370">
+            <small style="color: #6b7280; font-size: 0.75rem;">Khusus ZKTeco. Default 4370 jika dikosongkan.</small>
         </div>
 
         <div style="margin-bottom: 1.5rem;">
             <label class="form-label">Token Auth</label>
-            <input type="text" name="token_hash" class="form-control" value="{{ old('token_hash', $device->token_hash) }}" required>
-            <small style="color: #6b7280; font-size: 0.75rem;">Token rahasia untuk autentikasi perangkat ke API.</small>
+            <input type="text" name="token_hash" class="form-control" value="{{ old('token_hash', $device->token_hash) }}">
+            <small style="color: #6b7280; font-size: 0.75rem;">Untuk perangkat Custom IoT (HTTP). Kosongkan untuk ZKTeco.</small>
         </div>
 
         <div style="margin-bottom: 2rem;">
