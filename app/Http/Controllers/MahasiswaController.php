@@ -7,6 +7,7 @@ use App\Models\DeviceEnrollmentJob;
 use App\Models\Kelas;
 use App\Models\Mahasiswa;
 use App\Services\AuditLogger;
+use App\Services\ZktecoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -67,11 +68,99 @@ class MahasiswaController extends Controller
             'kelasList' => Kelas::orderBy('nama_kelas')->get(),
             'activeDevices' => Device::query()
                 ->where('is_active', true)
+                ->where('type', 'custom_iot')
                 ->whereNotNull('last_seen_at')
                 ->where('last_seen_at', '>=', $onlineThreshold)
                 ->orderBy('name')
                 ->get(['id', 'device_id', 'name', 'last_seen_at']),
+            // Perangkat ZKTeco (mis. X609) — koneksi langsung, tidak bergantung heartbeat.
+            'zktecoDevices' => Device::query()
+                ->where('is_active', true)
+                ->where('type', 'zkteco')
+                ->whereNotNull('ip_address')
+                ->orderBy('name')
+                ->get(['id', 'device_id', 'name', 'ip_address', 'port', 'last_seen_at']),
         ]);
+    }
+
+    /**
+     * Mendaftarkan (push) mahasiswa ke perangkat ZKTeco agar bisa tap & enroll.
+     */
+    public function registerToDevice(Request $request, Mahasiswa $mahasiswa, Device $device): JsonResponse
+    {
+        if ($device->type !== 'zkteco' || empty($device->ip_address)) {
+            return response()->json(['ok' => false, 'message' => 'Perangkat bukan tipe ZKTeco / tanpa IP.'], 422);
+        }
+
+        try {
+            (new ZktecoService($device))->pushUser($mahasiswa);
+
+            AuditLogger::log(
+                $request,
+                'register_mahasiswa_device',
+                'Mendaftarkan ' . $mahasiswa->nama . ' (' . $mahasiswa->nim . ') ke perangkat ' . ($device->name ?: $device->device_id),
+                $request->user()?->id
+            );
+
+            return response()->json([
+                'ok' => true,
+                'message' => 'Mahasiswa terdaftar di alat (UID ' . $mahasiswa->id . ', userid ' . $mahasiswa->nim . '). Silakan enroll sidik jari/kartu langsung di mesin, lalu klik "Sinkronkan dari Alat".',
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json(['ok' => false, 'message' => 'Gagal mendaftarkan: ' . $e->getMessage()], 200);
+        }
+    }
+
+    /**
+     * Membaca data biometrik/kartu mahasiswa dari perangkat ZKTeco dan menyimpannya.
+     */
+    public function syncFromDevice(Request $request, Mahasiswa $mahasiswa, Device $device): JsonResponse
+    {
+        if ($device->type !== 'zkteco' || empty($device->ip_address)) {
+            return response()->json(['ok' => false, 'message' => 'Perangkat bukan tipe ZKTeco / tanpa IP.'], 422);
+        }
+
+        try {
+            $data = (new ZktecoService($device))->readUser((int) $mahasiswa->id);
+
+            if (! $data['found']) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Mahasiswa belum terdaftar di alat. Klik "Daftarkan ke Alat" dulu.',
+                ], 200);
+            }
+
+            $updates = [];
+            if (! empty($data['cardno'])) {
+                $updates['rfid_uid'] = $data['cardno'];
+            }
+            if ($data['has_fingerprint']) {
+                $updates['fingerprint_data'] = 'enrolled@' . $device->device_id;
+            }
+
+            if (! empty($updates)) {
+                $mahasiswa->update($updates);
+            }
+
+            AuditLogger::log(
+                $request,
+                'sync_mahasiswa_device',
+                'Sinkronisasi data ' . $mahasiswa->nama . ' dari perangkat ' . ($device->name ?: $device->device_id),
+                $request->user()?->id
+            );
+
+            return response()->json([
+                'ok' => true,
+                'card_no' => $data['cardno'],
+                'has_fingerprint' => $data['has_fingerprint'],
+                'updated' => $updates,
+                'message' => empty($updates)
+                    ? 'Mahasiswa terdaftar, tapi belum ada kartu/sidik jari yang di-enroll di alat.'
+                    : 'Data tersinkron dari alat: ' . implode(', ', array_keys($updates)) . '.',
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json(['ok' => false, 'message' => 'Gagal sinkronisasi: ' . $e->getMessage()], 200);
+        }
     }
 
     public function startEnrollment(Request $request, Mahasiswa $mahasiswa): JsonResponse

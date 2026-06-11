@@ -76,6 +76,9 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::post('/master/mahasiswa/{mahasiswa}/enrollment/start', [MahasiswaController::class, 'startEnrollment'])->name('mahasiswa.enrollment.start');
     Route::get('/master/mahasiswa/{mahasiswa}/enrollment/{job}/status', [MahasiswaController::class, 'enrollmentStatus'])->name('mahasiswa.enrollment.status');
     Route::post('/master/mahasiswa/{mahasiswa}/enrollment/{job}/cancel', [MahasiswaController::class, 'cancelEnrollment'])->name('mahasiswa.enrollment.cancel');
+    // Registrasi via alat ZKTeco (koneksi langsung)
+    Route::post('/master/mahasiswa/{mahasiswa}/device/{device}/register', [MahasiswaController::class, 'registerToDevice'])->name('mahasiswa.device.register');
+    Route::post('/master/mahasiswa/{mahasiswa}/device/{device}/sync', [MahasiswaController::class, 'syncFromDevice'])->name('mahasiswa.device.sync');
     Route::put('/master/mahasiswa/{mahasiswa}', [MahasiswaController::class, 'update'])->name('mahasiswa.update');
     Route::delete('/master/mahasiswa/{mahasiswa}', [MahasiswaController::class, 'destroy'])->name('mahasiswa.destroy');
     Route::get('/master/matakuliah', [MasterDataController::class, 'mataKuliah'])->name('matakuliah');

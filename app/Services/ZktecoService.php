@@ -287,6 +287,64 @@ class ZktecoService
     }
 
     /**
+     * Membaca satu user dari perangkat berdasarkan uid, termasuk nomor kartu
+     * (cardno) dan status sidik jari (apakah sudah ter-enroll).
+     *
+     * @return array{found: bool, uid: int, userid: ?string, name: ?string, cardno: ?string, has_fingerprint: bool}
+     */
+    public function readUser(int $uid): array
+    {
+        return $this->withConnection(function (ZKTeco $zk) use ($uid) {
+            $users = $zk->getUser();
+            $match = null;
+
+            if (is_array($users)) {
+                foreach ($users as $u) {
+                    if ((int) ($u['uid'] ?? 0) === $uid) {
+                        $match = $u;
+                        break;
+                    }
+                }
+            }
+
+            if (! $match) {
+                return [
+                    'found' => false,
+                    'uid' => $uid,
+                    'userid' => null,
+                    'name' => null,
+                    'cardno' => null,
+                    'has_fingerprint' => false,
+                ];
+            }
+
+            // Nomor kartu: "0000000000" / 0 berarti belum ada kartu.
+            $cardno = trim($this->clean((string) ($match['cardno'] ?? '')));
+            if ($cardno === '' || (int) $cardno === 0) {
+                $cardno = null;
+            }
+
+            // Cek sidik jari (template) — bungkus try/catch karena bisa lambat/gagal.
+            $hasFingerprint = false;
+            try {
+                $fp = $zk->getFingerprint($uid);
+                $hasFingerprint = is_array($fp) ? count(array_filter($fp)) > 0 : ! empty($fp);
+            } catch (\Throwable $e) {
+                $hasFingerprint = false;
+            }
+
+            return [
+                'found' => true,
+                'uid' => $uid,
+                'userid' => trim($this->clean((string) ($match['userid'] ?? ''))),
+                'name' => trim($this->clean((string) ($match['name'] ?? ''))),
+                'cardno' => $cardno,
+                'has_fingerprint' => $hasFingerprint,
+            ];
+        });
+    }
+
+    /**
      * Menghapus satu user dari perangkat berdasarkan uid.
      */
     public function removeUser(int $uid): bool

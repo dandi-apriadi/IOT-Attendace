@@ -49,6 +49,32 @@
         </div>
     </div>
 
+    {{-- Registrasi via Alat ZKTeco (koneksi langsung, mis. Solution X609) --}}
+    <div style="margin-bottom:1rem; padding:0.9rem; border-radius:10px; background:#f0fdf4; border:1px solid #bbf7d0;">
+        <div style="font-weight:700; color:#166534; margin-bottom:0.2rem;">Registrasi via Alat ZKTeco (Fingerprint / Kartu)</div>
+        <div style="font-size:0.82rem; color:#3f6b4e; margin-bottom:0.75rem;">
+            Alur: <strong>Daftarkan ke Alat</strong> (kirim NIM &amp; nama ke mesin) &rarr; mahasiswa enroll sidik jari/kartu langsung di mesin X609 &rarr; <strong>Sinkronkan dari Alat</strong> untuk menarik nomor kartu &amp; status sidik jari ke sini. Setelah terdaftar, mahasiswa langsung bisa absen (dicocokkan via NIM &amp; jadwal kelas).
+        </div>
+
+        @if ($zktecoDevices->isEmpty())
+            <div style="font-size:0.82rem; color:#9a3412;">Belum ada perangkat ZKTeco aktif. Tambahkan di <a href="{{ route('devices.index') }}" style="color:#166534;">Master Data &rarr; Perangkat IoT</a> (tipe ZKTeco + IP).</div>
+        @else
+            <div style="display:flex; gap:0.6rem; align-items:flex-end; flex-wrap:wrap;">
+                <div style="flex:1; min-width:200px;">
+                    <label for="zk_device_id" style="font-size:0.75rem; color:#3f6b4e; display:block; margin-bottom:0.4rem;">Pilih Alat ZKTeco</label>
+                    <select id="zk_device_id" style="width:100%; padding:0.7rem; border:none; background:#fff; border-radius:8px;">
+                        @foreach ($zktecoDevices as $device)
+                            <option value="{{ $device->id }}">{{ $device->name ?: $device->device_id }} ({{ $device->ip_address }}:{{ $device->port ?: 4370 }})</option>
+                        @endforeach
+                    </select>
+                </div>
+                <button type="button" id="btn-zk-register" class="btn-kinetic" style="background:#16a34a;"><i class="fas fa-id-card"></i> Daftarkan ke Alat</button>
+                <button type="button" id="btn-zk-sync" class="btn-kinetic" style="background:#0ea5e9;"><i class="fas fa-rotate"></i> Sinkronkan dari Alat</button>
+            </div>
+            <div id="zk-reg-status" style="margin-top:0.6rem; font-size:0.82rem; color:#3f6b4e;">Pilih alat lalu daftarkan.</div>
+        @endif
+    </div>
+
     @if ($errors->any())
         <div style="margin-bottom: 1rem; background: #fdecec; color: #ba1a1a; padding: 0.75rem 1rem; border-radius: 8px;">
             {{ $errors->first() }}
@@ -277,6 +303,65 @@
             setStatus('Gagal membatalkan sinkronisasi.', true);
             cancelBtn.disabled = false;
         }
+    });
+})();
+
+// ===== Registrasi via Alat ZKTeco =====
+(function () {
+    const regBtn = document.getElementById('btn-zk-register');
+    const syncBtn = document.getElementById('btn-zk-sync');
+    const deviceSelect = document.getElementById('zk_device_id');
+    const statusEl = document.getElementById('zk-reg-status');
+    if (!regBtn || !syncBtn || !deviceSelect) return;
+
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    const mahasiswaId = {{ $mahasiswa->id }};
+
+    const setStatus = (msg, isError = false) => {
+        statusEl.textContent = msg;
+        statusEl.style.color = isError ? '#b91c1c' : '#3f6b4e';
+    };
+
+    const call = async (action) => {
+        const deviceId = deviceSelect.value;
+        if (!deviceId) { setStatus('Pilih alat ZKTeco dulu.', true); return null; }
+        regBtn.disabled = true; syncBtn.disabled = true;
+        try {
+            const res = await fetch(`/master/mahasiswa/${mahasiswaId}/device/${deviceId}/${action}`, {
+                method: 'POST',
+                headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+            });
+            return await res.json();
+        } catch (e) {
+            setStatus('Gagal menghubungi server: ' + e.message, true);
+            return null;
+        } finally {
+            regBtn.disabled = false; syncBtn.disabled = false;
+        }
+    };
+
+    regBtn.addEventListener('click', async () => {
+        setStatus('Menghubungi alat & mendaftarkan mahasiswa...');
+        const data = await call('register');
+        if (data) setStatus(data.message || (data.ok ? 'Berhasil.' : 'Gagal.'), !data.ok);
+    });
+
+    syncBtn.addEventListener('click', async () => {
+        setStatus('Membaca data dari alat...');
+        const data = await call('sync');
+        if (!data) return;
+        if (data.ok && data.updated) {
+            // Isi otomatis field form bila ada data baru.
+            if (data.updated.rfid_uid) {
+                const f = document.getElementById('rfid_uid');
+                if (f) f.value = data.updated.rfid_uid;
+            }
+            if (data.updated.fingerprint_data) {
+                const f = document.getElementById('fingerprint_data');
+                if (f) f.value = data.updated.fingerprint_data;
+            }
+        }
+        setStatus(data.message || (data.ok ? 'Tersinkron.' : 'Gagal.'), !data.ok);
     });
 })();
 </script>
