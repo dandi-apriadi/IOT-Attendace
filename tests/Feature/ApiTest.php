@@ -281,6 +281,39 @@ class ApiTest extends TestCase
         $this->assertContains($absensi->status, ['Hadir', 'Telat']);
     }
 
+    public function test_api_absensi_menandai_telat_setelah_lewat_15_menit_dari_jadwal()
+    {
+        $tapAt = Carbon::parse('2026-06-11 08:16:00');
+        $jadwal = Jadwal::firstOrFail();
+        $jadwal->update([
+            'hari' => $tapAt->format('l'),
+            'jam_mulai' => '08:00:00',
+            'jam_selesai' => '10:00:00',
+        ]);
+
+        Carbon::setTestNow($tapAt);
+
+        $response = $this->postJson('/api/absensi', [
+            'identifier' => 'RFID123456',
+            'type' => 'RFID',
+        ], [
+            'X-Device-Token' => $this->deviceToken,
+            'X-Device-Id' => $this->deviceId,
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.keterangan', 'Telat');
+
+        $this->assertDatabaseHas('absensi', [
+            'jadwal_id' => $jadwal->id,
+            'tanggal' => $tapAt->toDateString(),
+            'waktu_tap' => '08:16:00',
+            'status' => 'Telat',
+        ]);
+
+        Carbon::setTestNow();
+    }
+
     /**
      * Test multiple tap dari mahasiswa yang sama hari yang sama
      */
@@ -312,6 +345,46 @@ class ApiTest extends TestCase
                          ->count();
 
         $this->assertEquals(1, $count);
+    }
+
+    public function test_live_monitoring_data_refreshes_after_existing_attendance_is_updated()
+    {
+        $dosen = User::where('role', 'dosen')->firstOrFail();
+        $date = Carbon::now()->toDateString();
+        $firstTapAt = Carbon::now()->copy()->setSeconds(0);
+        $secondTapAt = $firstTapAt->copy()->addSeconds(2);
+
+        Carbon::setTestNow($firstTapAt);
+        $this->postJson('/api/absensi', [
+            'identifier' => 'RFID123456',
+            'type' => 'RFID',
+        ], [
+            'X-Device-Token' => $this->deviceToken,
+            'X-Device-Id' => $this->deviceId,
+        ])->assertStatus(200);
+
+        $this->actingAs($dosen)
+            ->getJson("/monitoring/live/data?date={$date}")
+            ->assertStatus(200)
+            ->assertJsonPath('records.0.metode_absensi', 'RFID');
+
+        Carbon::setTestNow($secondTapAt);
+        $this->postJson('/api/absensi', [
+            'identifier' => 'FINGER123456',
+            'type' => 'Fingerprint',
+        ], [
+            'X-Device-Token' => $this->deviceToken,
+            'X-Device-Id' => $this->deviceId,
+        ])->assertStatus(200);
+
+        $this->actingAs($dosen)
+            ->getJson("/monitoring/live/data?date={$date}")
+            ->assertStatus(200)
+            ->assertJsonPath('records.0.metode_absensi', 'Fingerprint')
+            ->assertJsonPath('records.0.time', $secondTapAt->format('H:i:s'))
+            ->assertJsonPath('records.0.waktu_tap', $secondTapAt->format('H:i:s'));
+
+        Carbon::setTestNow();
     }
 
     /**

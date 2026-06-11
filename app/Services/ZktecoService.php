@@ -7,6 +7,7 @@ use App\Models\Device;
 use App\Models\Jadwal;
 use App\Models\Mahasiswa;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Jmrashed\Zkteco\Lib\Helper\Util;
 use Jmrashed\Zkteco\Lib\ZKTeco;
@@ -505,6 +506,7 @@ class ZktecoService
 
         $inserted = 0;
         $skipped = 0;
+        $affectedLiveCaches = [];
 
         foreach ($attendances as $record) {
             $uid = $record['id'] ?? null;
@@ -556,7 +558,13 @@ class ZktecoService
                 'metode_absensi' => 'Fingerprint',
                 'status' => 'Hadir',
             ]);
+            $affectedLiveCaches[$date . '|' . $jadwal->id] = [$date, (int) $jadwal->id];
             $inserted++;
+        }
+
+        foreach ($affectedLiveCaches as [$date, $jadwalId]) {
+            Cache::forget(sprintf('monitoring.live.payload.%s.%s', $date, 'all'));
+            Cache::forget(sprintf('monitoring.live.payload.%s.%d', $date, $jadwalId));
         }
 
         if ($inserted > 0) {

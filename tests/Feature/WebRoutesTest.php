@@ -9,6 +9,7 @@ use App\Models\MataKuliah;
 use App\Models\Mahasiswa;
 use App\Models\Device;
 use App\Models\Jadwal;
+use App\Models\Absensi;
 use App\Models\MataKuliahDosenAssignment;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -156,6 +157,86 @@ class WebRoutesTest extends TestCase
         $this->actingAs($this->dosen);
         $response = $this->get('/monitoring/live');
         $response->assertStatus(200);
+    }
+
+    public function test_monitoring_live_menandai_alpa_untuk_mahasiswa_tanpa_absensi_pada_jadwal_selesai()
+    {
+        $finishedAt = Carbon::parse('2026-06-08 10:01:00');
+        $this->jadwal->update([
+            'hari' => $finishedAt->format('l'),
+            'jam_mulai' => '08:00:00',
+            'jam_selesai' => '10:00:00',
+        ]);
+
+        Mahasiswa::create([
+            'nim' => '20220002',
+            'nama' => 'Siti Tanpa Tap',
+            'kelas_id' => $this->mahasiswa->kelas_id,
+            'rfid_uid' => 'RFID654321',
+            'fingerprint_data' => 'FINGER654321',
+            'face_model_data' => 'FACE654321',
+            'barcode_id' => 'BARCODE654321',
+        ]);
+
+        Absensi::create([
+            'mahasiswa_id' => $this->mahasiswa->id,
+            'jadwal_id' => $this->jadwal->id,
+            'tanggal' => $finishedAt->toDateString(),
+            'waktu_tap' => '08:05:00',
+            'metode_absensi' => 'RFID',
+            'status' => 'Hadir',
+        ]);
+
+        Carbon::setTestNow($finishedAt);
+
+        $this->actingAs($this->dosen);
+        $response = $this->getJson("/monitoring/live/data?date={$finishedAt->toDateString()}&jadwal_id={$this->jadwal->id}");
+
+        $response->assertStatus(200)
+            ->assertJsonFragment([
+                'name' => 'Siti Tanpa Tap',
+                'status' => 'Alpa',
+                'is_pending' => false,
+                'editable' => false,
+            ]);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_detail_sesi_jadwal_menandai_alpa_setelah_jadwal_selesai()
+    {
+        $finishedAt = Carbon::parse('2026-06-08 10:01:00');
+        $this->jadwal->update([
+            'hari' => $finishedAt->format('l'),
+            'jam_mulai' => '08:00:00',
+            'jam_selesai' => '10:00:00',
+        ]);
+
+        Mahasiswa::create([
+            'nim' => '20220002',
+            'nama' => 'Siti Tanpa Tap',
+            'kelas_id' => $this->mahasiswa->kelas_id,
+            'rfid_uid' => 'RFID654321',
+            'fingerprint_data' => 'FINGER654321',
+            'face_model_data' => 'FACE654321',
+            'barcode_id' => 'BARCODE654321',
+        ]);
+
+        Carbon::setTestNow($finishedAt);
+
+        $this->actingAs($this->dosen);
+        $response = $this->get('/dosen/schedule/detail?' . http_build_query([
+            'date' => $finishedAt->toDateString(),
+            'mata_kuliah_id' => $this->jadwal->mata_kuliah_id,
+            'kelas_id' => $this->jadwal->kelas_id,
+        ]));
+
+        $response->assertStatus(200)
+            ->assertSee('Siti Tanpa Tap')
+            ->assertSee('Alpa')
+            ->assertDontSee('Belum Absensi');
+
+        Carbon::setTestNow();
     }
 
     /**

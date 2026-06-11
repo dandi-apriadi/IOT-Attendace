@@ -80,8 +80,7 @@ class AttendanceController extends Controller
                 ->first();
 
             if ($jadwal) {
-                // For manual sessions, the grace period is based on when the session actually started.
-                $baselineTime = $manualSession['started_at'] ?? $jadwal->jam_mulai;
+                $baselineTime = $jadwal->jam_mulai;
             }
         }
 
@@ -196,6 +195,7 @@ class AttendanceController extends Controller
         $queryDurationMs = (microtime(true) - $queryStartedAt) * 1000;
         $resultCount = 1;
         $this->recordApiPerformanceMetric($queryDurationMs, $requestStartedAt, $resultCount, $request);
+        $this->forgetLiveMonitoringCache($date, (int) $jadwal->id);
 
         return response()->json([
             'status' => 'success',
@@ -206,6 +206,12 @@ class AttendanceController extends Controller
                 'keterangan' => $status
             ]
         ]);
+    }
+
+    private function forgetLiveMonitoringCache(string $date, int $jadwalId): void
+    {
+        Cache::forget(sprintf('monitoring.live.payload.%s.%s', $date, 'all'));
+        Cache::forget(sprintf('monitoring.live.payload.%s.%d', $date, $jadwalId));
     }
 
     private function recordApiPerformanceMetric(float $queryDurationMs, float $requestStartedAt, int $resultCount, Request $request): void
@@ -233,8 +239,7 @@ class AttendanceController extends Controller
         $tap = Carbon::parse($tapTime);
         $baseline = Carbon::parse($baselineTime);
 
-        // If tap is more than GRACE_PERIOD_MINUTES after baseline, mark as Late (Telat).
-        if ($tap->diffInMinutes($baseline, false) > self::GRACE_PERIOD_MINUTES) {
+        if ($tap->gt($baseline->copy()->addMinutes(self::GRACE_PERIOD_MINUTES))) {
             return 'Telat';
         }
         return 'Hadir';

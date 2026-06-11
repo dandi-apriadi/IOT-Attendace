@@ -377,6 +377,7 @@ class DosenSessionController extends Controller
             ];
         }
 
+        $isSessionCompleted = $this->isSessionCompleted($selectedDate, $targetJadwal);
         $jadwalIds = collect([$targetJadwal->id]);
 
         $students = Mahasiswa::query()
@@ -397,9 +398,9 @@ class DosenSessionController extends Controller
             ->unique('mahasiswa_id')
             ->keyBy('mahasiswa_id');
 
-        $studentRows = $students->map(function (Mahasiswa $student) use ($latestAttendanceByStudent): array {
+        $studentRows = $students->map(function (Mahasiswa $student) use ($latestAttendanceByStudent, $isSessionCompleted): array {
             $attendance = $latestAttendanceByStudent->get($student->id);
-            $status = $attendance?->status ?? 'Pending';
+            $status = $attendance?->status ?? ($isSessionCompleted ? (string) config('attendance.absensi_absent_status', 'Alpa') : 'Pending');
 
             return [
                 'nim' => $student->nim,
@@ -407,7 +408,7 @@ class DosenSessionController extends Controller
                 'status' => $status,
                 'metode' => $attendance?->metode_absensi ?? '-',
                 'waktu_tap' => $this->formatTapTime($status, $attendance?->waktu_tap),
-                'is_pending' => ! $attendance,
+                'is_pending' => ! $attendance && ! $isSessionCompleted,
             ];
         })->values();
 
@@ -466,6 +467,22 @@ class DosenSessionController extends Controller
         } catch (\Throwable) {
             return now()->toDateString();
         }
+    }
+
+    private function isSessionCompleted(string $selectedDate, Jadwal $jadwal): bool
+    {
+        $selectedDay = Carbon::parse($selectedDate)->startOfDay();
+        $today = now()->copy()->startOfDay();
+
+        if ($selectedDay->lt($today)) {
+            return true;
+        }
+
+        if ($selectedDay->gt($today)) {
+            return false;
+        }
+
+        return now()->format('H:i:s') > (string) $jadwal->jam_selesai;
     }
 
     private function assignedCourseIds(int $userId): array

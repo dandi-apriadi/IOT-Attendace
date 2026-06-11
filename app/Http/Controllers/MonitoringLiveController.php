@@ -199,7 +199,7 @@ class MonitoringLiveController extends Controller
                     'jadwal.mata_kuliah:id,kode_mk',
                     'jadwal.kelas:id,nama_kelas',
                 ])
-                ->select(['id', 'mahasiswa_id', 'jadwal_id', 'tanggal', 'waktu_tap', 'metode_absensi', 'status', 'created_at'])
+                ->select(['id', 'mahasiswa_id', 'jadwal_id', 'tanggal', 'waktu_tap', 'metode_absensi', 'status', 'created_at', 'updated_at'])
                 ->whereDate('tanggal', $selectedDate);
 
             if ($normalizedJadwalId) {
@@ -207,6 +207,8 @@ class MonitoringLiveController extends Controller
             }
 
             $liveStream = $recordsQuery
+                ->orderByDesc('updated_at')
+                ->orderByDesc('waktu_tap')
                 ->orderByDesc('created_at')
                 ->limit(30)
                 ->get();
@@ -228,7 +230,7 @@ class MonitoringLiveController extends Controller
                     'id' => $item->id,
                     'jadwal_id' => $item->jadwal_id,
                     'date' => (string) ($item->tanggal ?? ''),
-                    'time' => optional($item->created_at)->format('H:i:s') ?? '-',
+                    'time' => $item->waktu_tap ? substr((string) $item->waktu_tap, 0, 8) : (optional($item->updated_at)->format('H:i:s') ?? '-'),
                     'waktu_tap' => (string) ($item->waktu_tap ?? '-'),
                     'name' => $item->mahasiswa?->nama ?? 'N/A',
                     'nim' => $item->mahasiswa?->nim ?? 'N/A',
@@ -261,6 +263,9 @@ class MonitoringLiveController extends Controller
                     ->orderBy('nama')
                     ->get()
                     ->map(function (Mahasiswa $mahasiswa) use ($selectedSession, $selectedDate, $normalizedJadwalId): array {
+                        $isAbsent = ($selectedSession['phase'] ?? '') === 'completed';
+                        $status = $isAbsent ? (string) config('attendance.absensi_absent_status', 'Alpa') : 'Pending';
+
                         return [
                             'id' => null,
                             'jadwal_id' => $normalizedJadwalId,
@@ -271,8 +276,8 @@ class MonitoringLiveController extends Controller
                             'nim' => $mahasiswa->nim,
                             'schedule' => trim(($selectedSession['course_code'] ?? 'N/A') . ' - ' . ($selectedSession['class_name'] ?? 'N/A')),
                             'metode_absensi' => '-',
-                            'status' => 'Pending',
-                            'is_pending' => true,
+                            'status' => $status,
+                            'is_pending' => ! $isAbsent,
                             'editable' => false,
                         ];
                     })
