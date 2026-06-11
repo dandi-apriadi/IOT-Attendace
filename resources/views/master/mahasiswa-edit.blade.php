@@ -2,7 +2,7 @@
 
 @section('content')
 @php
-    $hasCustomEnrollmentDevices = $activeDevices->isNotEmpty();
+    $hasCustomEnrollmentDevices = ($customDeviceCount ?? 0) > 0;
     $hasZktecoDevices = $zktecoDevices->isNotEmpty();
 @endphp
 <div class="glass-card" style="max-width: 900px; margin: 0 auto;">
@@ -23,7 +23,7 @@
         <div style="display:flex; align-items:center; justify-content:space-between; gap:0.8rem; flex-wrap:wrap;">
             <div>
                 <div style="font-weight:700; color:#124b77; margin-bottom:0.2rem;">Registrasi via Custom IoT (HTTP)</div>
-                <div style="font-size:0.82rem; color:#2f5b7b;">Untuk alat buatan sendiri yang mengirim heartbeat. Pilih perangkat online, lalu alat akan capture data sesuai perintah.</div>
+                <div style="font-size:0.82rem; color:#2f5b7b;">Alur: alat mengirim heartbeat -> pilih perangkat online -> mulai registrasi -> alat polling perintah -> data tersimpan otomatis.</div>
             </div>
         </div>
 
@@ -62,6 +62,18 @@
             <button type="button" id="btn-cancel-enrollment" class="btn-kinetic" style="background:#FADBD8; color:#7E1F1F;" disabled>Batalkan Registrasi</button>
             <span id="enrollment-status" style="font-size:0.82rem; color:#2f5b7b;">Menunggu aksi.</span>
         </div>
+
+        @if ($activeDevices->isEmpty())
+            <div style="margin-top:0.75rem; font-size:0.8rem; color:#7c2d12; background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; padding:0.65rem 0.75rem;">
+                @if (($customDeviceCount ?? 0) > 0)
+                    Ada {{ $customDeviceCount }} perangkat Custom IoT aktif, tetapi belum ada heartbeat dalam 2 menit terakhir. Pastikan firmware memanggil <code>/api/device/heartbeat</code> dengan header <code>X-Device-Id</code> dan <code>X-Device-Token</code>.
+                @elseif ($zktecoDevices->isNotEmpty())
+                    Perangkat yang terdaftar saat ini bertipe ZKTeco. Gunakan panel "Registrasi via Alat ZKTeco" di bawah untuk membaca mesin.
+                @else
+                    Belum ada perangkat Custom IoT aktif. Tambahkan perangkat bertipe Custom IoT di Master Data -> Perangkat IoT.
+                @endif
+            </div>
+        @endif
     </div>
     @endif
 

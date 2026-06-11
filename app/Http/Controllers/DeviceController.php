@@ -40,7 +40,7 @@ class DeviceController extends Controller
         ]);
 
         $data['is_active'] = ! empty($data['is_active']);
-        $data['token_hash'] = $data['token_hash'] ?: Str::random(40);
+        [$data['token_hash'], $generatedToken] = $this->normalizeDeviceTokenHash($data['token_hash'] ?? null);
 
         if ($data['type'] === 'zkteco' && empty($data['port'])) {
             $data['port'] = 4370;
@@ -55,7 +55,12 @@ class DeviceController extends Controller
             $request->user()?->id
         );
 
-        return redirect()->route('devices.index')->with('success', 'Perangkat berhasil ditambahkan.');
+        $message = 'Perangkat berhasil ditambahkan.';
+        if ($data['type'] === 'custom_iot' && $generatedToken !== null) {
+            $message .= ' Token perangkat dibuat otomatis: ' . $generatedToken;
+        }
+
+        return redirect()->route('devices.index')->with('success', $message);
     }
 
     public function edit(string $id): View
@@ -82,7 +87,7 @@ class DeviceController extends Controller
         ]);
 
         $data['is_active'] = ! empty($data['is_active']);
-        $data['token_hash'] = $data['token_hash'] ?: ($device->token_hash ?: Str::random(40));
+        [$data['token_hash']] = $this->normalizeDeviceTokenHash($data['token_hash'] ?? null, $device->token_hash);
 
         if ($data['type'] === 'zkteco' && empty($data['port'])) {
             $data['port'] = 4370;
@@ -98,6 +103,33 @@ class DeviceController extends Controller
         );
 
         return redirect()->route('devices.index')->with('success', 'Data perangkat berhasil diperbarui.');
+    }
+
+    /**
+     * Form menerima token asli agar mudah dipakai firmware. Database tetap
+     * menyimpan SHA-256 karena middleware membandingkan hash token masuk.
+     *
+     * @return array{0: string, 1: ?string}
+     */
+    private function normalizeDeviceTokenHash(?string $input, ?string $existingHash = null): array
+    {
+        $token = trim((string) $input);
+
+        if ($token === '' && $existingHash) {
+            return [$existingHash, null];
+        }
+
+        $generatedToken = null;
+        if ($token === '') {
+            $token = Str::random(40);
+            $generatedToken = $token;
+        }
+
+        if (preg_match('/^[a-f0-9]{64}$/i', $token) === 1) {
+            return [strtolower($token), $generatedToken];
+        }
+
+        return [hash('sha256', $token), $generatedToken];
     }
 
     public function destroy(Request $request, string $id): RedirectResponse

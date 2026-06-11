@@ -39,7 +39,7 @@
             </select>
             <input name="ip_address" type="text" placeholder="IP Address (ex: 192.168.0.10)" class="form-control" style="flex: 1; min-width: 150px;">
             <input name="port" type="number" placeholder="Port (ZKTeco: 4370)" class="form-control" style="flex: 1; min-width: 120px;">
-            <input name="token_hash" type="text" placeholder="Token Auth (opsional)" class="form-control" style="flex: 1; min-width: 150px;">
+            <input name="token_hash" type="text" placeholder="Token Custom IoT" class="form-control" style="flex: 1; min-width: 150px;">
 
             <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0 0.5rem;">
                 <input type="checkbox" name="is_active" id="is_active" value="1" checked>
