@@ -89,6 +89,10 @@
                                     @csrf
                                     <button type="submit" class="zk-btn" style="background:#ecfdf5; color:#047857;"><i class="fas fa-download"></i> Pull Absensi</button>
                                 </form>
+                                <form action="{{ route('devices.pull-biometrics', $device->id) }}" method="POST" onsubmit="return confirm('Tarik data kartu dan sidik jari dari alat untuk mahasiswa yang sudah terdaftar di sistem?');" style="margin:0;">
+                                    @csrf
+                                    <button type="submit" class="zk-btn" style="background:#e0f2fe; color:#0369a1;"><i class="fas fa-fingerprint"></i> Pull Biometrik</button>
+                                </form>
                                 <a href="{{ route('devices.users', $device->id) }}" class="zk-btn" style="background:#f1f5f9; color:#334155; text-decoration:none;"><i class="fas fa-users"></i> Lihat Users</a>
                                 <form action="{{ route('devices.sync-time', $device->id) }}" method="POST" onsubmit="return confirm('Sinkronkan waktu perangkat dengan server?');" style="margin:0;">
                                     @csrf

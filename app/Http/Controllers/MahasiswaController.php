@@ -38,6 +38,12 @@ class MahasiswaController extends Controller
         return view('master.mahasiswa', [
             'mahasiswaList' => $query->paginate(10)->withQueryString(),
             'kelasList' => Kelas::orderBy('nama_kelas')->get(),
+            'zktecoDevices' => Device::query()
+                ->where('is_active', true)
+                ->where('type', 'zkteco')
+                ->whereNotNull('ip_address')
+                ->orderBy('name')
+                ->get(['id', 'device_id', 'name', 'ip_address', 'port']),
             'search' => $search,
             'kelasId' => $kelasId,
         ]);
@@ -57,6 +63,54 @@ class MahasiswaController extends Controller
         );
 
         return redirect()->route('mahasiswa')->with('success', 'Mahasiswa berhasil ditambahkan.');
+    }
+
+    public function pullBiometrics(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'device_id' => ['required', 'integer', 'exists:devices,id'],
+        ]);
+
+        $device = Device::query()
+            ->whereKey($validated['device_id'])
+            ->where('is_active', true)
+            ->where('type', 'zkteco')
+            ->whereNotNull('ip_address')
+            ->first();
+
+        if (! $device) {
+            return back()->with('error', 'Pilih perangkat ZKTeco aktif yang memiliki IP.');
+        }
+
+        try {
+            $result = (new ZktecoService($device))->syncRegisteredStudentBiometrics();
+
+            AuditLogger::log(
+                $request,
+                'pull_biometrics_mahasiswa',
+                "Tarik biometrik mahasiswa: {$result['updated']} diperbarui dari perangkat " . ($device->name ?: $device->device_id),
+                $request->user()?->id
+            );
+
+            $message = "Tarik biometrik selesai: {$result['updated']} mahasiswa diperbarui, "
+                . "{$result['matched']} cocok dari {$result['scanned']} user alat";
+
+            if ($result['rfid_updated'] > 0 || $result['fingerprint_updated'] > 0) {
+                $message .= " ({$result['rfid_updated']} RFID, {$result['fingerprint_updated']} sidik jari)";
+            }
+            if ($result['unmatched'] > 0) {
+                $message .= ", {$result['unmatched']} belum ada di sistem";
+            }
+            if ($result['conflicts'] > 0) {
+                $message .= ", {$result['conflicts']} konflik kartu";
+
+                return back()->with('error', $message . '. ' . implode(' ', $result['errors']));
+            }
+
+            return back()->with('success', $message . '.');
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Gagal menarik biometrik: ' . $e->getMessage());
+        }
     }
 
     public function edit(Mahasiswa $mahasiswa): View
@@ -316,64 +370,9 @@ class MahasiswaController extends Controller
         return redirect()->route('mahasiswa')->with('success', 'Data mahasiswa berhasil dihapus.');
     }
 
-    public function show(Mahasiswa $mahasiswa): View
+    public function show(Request $request, Mahasiswa $mahasiswa): View
     {
-        $presentStatuses = (array) config('attendance.absensi_present_statuses', ['Hadir']);
-        $excusedStatuses = (array) config('attendance.absensi_excused_statuses', ['Sakit', 'Izin']);
-        $absentStatus = (string) config('attendance.absensi_absent_status', 'Alpa');
-
-        $absensiHistory = $mahasiswa->absensi()
-            ->with(['jadwal.mataKuliah'])
-            ->latest()
-            ->paginate(15);
-
-        $totalAbsensi = $mahasiswa->absensi()->count();
-        $hadirCount = $mahasiswa->absensi()->whereIn('status', $presentStatuses)->count();
-        $sabitIzinCount = $mahasiswa->absensi()->whereIn('status', $excusedStatuses)->count();
-        $alpaCount = $mahasiswa->absensi()->where('status', $absentStatus)->count();
-
-        $persentaseHadir = $totalAbsensi > 0 ? round(($hadirCount / $totalAbsensi) * 100, 2) : 0;
-
-        $thisMonthAbsensi = $mahasiswa->absensi()
-            ->whereMonth('created_at', now()->month)
-            ->count();
-        $thisMonthHadir = $mahasiswa->absensi()
-            ->whereIn('status', $presentStatuses)
-            ->whereMonth('created_at', now()->month)
-            ->count();
-
-        return view('master.student-detail', [
-            'mahasiswa' => $mahasiswa,
-            'absensiHistory' => $absensiHistory,
-            'historyQuery' => $mahasiswa->absensi()->with(['jadwal.mataKuliah']),
-            'totalAbsensi' => $totalAbsensi,
-            'hadirCount' => $hadirCount,
-            'sabitIzinCount' => $sabitIzinCount,
-            'alpaCount' => $alpaCount,
-            'persentaseHadir' => $persentaseHadir,
-            'thisMonthAbsensi' => $thisMonthAbsensi,
-            'thisMonthHadir' => $thisMonthHadir,
-            'hasReportContext' => false,
-            'reportBackUrl' => route('mahasiswa'),
-            'selectedSemesterLabel' => null,
-            'selectedMataKuliahLabel' => null,
-            'selectedKelasLabel' => null,
-            'selectedStartDate' => '',
-            'selectedEndDate' => '',
-            'selectedStatusFilter' => '',
-            'statusFilterOptions' => [
-                ['value' => '', 'label' => 'Semua Status'],
-                ['value' => 'present', 'label' => 'Hadir'],
-                ['value' => 'excused', 'label' => 'Sakit/Izin'],
-                ['value' => 'absent', 'label' => 'Alpa'],
-            ],
-            'filtersQuery' => [],
-            'baseFilterQuery' => ['id' => $mahasiswa->id],
-            'quickDateRanges' => [],
-            'weeklyTrend' => [],
-            'trendInsight' => ['delta' => 0.0, 'direction' => 'flat', 'text' => 'Belum ada pembanding tren.'],
-            'statusLabels' => (array) config('attendance.absensi_statuses', []),
-        ]);
+        return app(StudentDetailController::class)->show($request, $mahasiswa->id);
     }
 
     private function validatePayload(Request $request, ?int $mahasiswaId = null): array

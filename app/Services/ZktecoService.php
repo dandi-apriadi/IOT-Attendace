@@ -287,6 +287,105 @@ class ZktecoService
     }
 
     /**
+     * Menarik data biometrik user yang sudah ada di alat, lalu memperbarui
+     * mahasiswa yang sudah terdaftar di sistem. Matching utama memakai NIM
+     * dari userid alat, fallback memakai uid = id mahasiswa.
+     *
+     * @return array{scanned: int, matched: int, updated: int, rfid_updated: int, fingerprint_updated: int, unmatched: int, conflicts: int, errors: array<string>}
+     */
+    public function syncRegisteredStudentBiometrics(): array
+    {
+        return $this->withConnection(function (ZKTeco $zk) {
+            $users = $zk->getUser();
+
+            return $this->syncRegisteredStudentBiometricsFromUsers(
+                is_array($users) ? $users : [],
+                function (int $uid) use ($zk): bool {
+                    try {
+                        $fp = $zk->getFingerprint($uid);
+
+                        return is_array($fp) ? count(array_filter($fp)) > 0 : ! empty($fp);
+                    } catch (\Throwable $e) {
+                        return false;
+                    }
+                }
+            );
+        });
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $users
+     * @return array{scanned: int, matched: int, updated: int, rfid_updated: int, fingerprint_updated: int, unmatched: int, conflicts: int, errors: array<string>}
+     */
+    public function syncRegisteredStudentBiometricsFromUsers(array $users, ?callable $fingerprintResolver = null): array
+    {
+        $result = [
+            'scanned' => count($users),
+            'matched' => 0,
+            'updated' => 0,
+            'rfid_updated' => 0,
+            'fingerprint_updated' => 0,
+            'unmatched' => 0,
+            'conflicts' => 0,
+            'errors' => [],
+        ];
+
+        foreach ($users as $user) {
+            $uid = (int) ($user['uid'] ?? 0);
+            $userid = trim($this->clean((string) ($user['userid'] ?? '')));
+            $cardno = $this->normalizeCardNo($user['cardno'] ?? null);
+
+            $mahasiswa = Mahasiswa::query()
+                ->when($userid !== '', fn ($query) => $query->where('nim', $userid))
+                ->when($userid === '' && $uid > 0, fn ($query) => $query->where('id', $uid))
+                ->first();
+
+            if (! $mahasiswa && $uid > 0) {
+                $mahasiswa = Mahasiswa::find($uid);
+            }
+
+            if (! $mahasiswa) {
+                $result['unmatched']++;
+                continue;
+            }
+
+            $result['matched']++;
+            $updates = [];
+
+            if ($cardno !== null) {
+                $cardOwnerExists = Mahasiswa::query()
+                    ->where('rfid_uid', $cardno)
+                    ->whereKeyNot($mahasiswa->id)
+                    ->exists();
+
+                if ($cardOwnerExists) {
+                    $result['conflicts']++;
+                    if (count($result['errors']) < 10) {
+                        $result['errors'][] = "{$mahasiswa->nim}: kartu {$cardno} sudah dipakai mahasiswa lain.";
+                    }
+                } elseif ((string) $mahasiswa->rfid_uid !== $cardno) {
+                    $updates['rfid_uid'] = $cardno;
+                    $result['rfid_updated']++;
+                }
+            }
+
+            $hasFingerprint = $fingerprintResolver ? (bool) $fingerprintResolver($uid) : false;
+            $fingerprintMarker = 'enrolled@' . ($this->device->device_id ?: $this->ip);
+            if ($hasFingerprint && (string) $mahasiswa->fingerprint_data !== $fingerprintMarker) {
+                $updates['fingerprint_data'] = $fingerprintMarker;
+                $result['fingerprint_updated']++;
+            }
+
+            if ($updates !== []) {
+                $mahasiswa->update($updates);
+                $result['updated']++;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
      * Membaca satu user dari perangkat berdasarkan uid, termasuk nomor kartu
      * (cardno) dan status sidik jari (apakah sudah ter-enroll).
      *
@@ -485,5 +584,16 @@ class ZktecoService
         }
 
         return trim($value);
+    }
+
+    private function normalizeCardNo(mixed $cardNo): ?string
+    {
+        $value = trim($this->clean((string) ($cardNo ?? '')));
+
+        if ($value === '' || (int) $value === 0) {
+            return null;
+        }
+
+        return $value;
     }
 }
