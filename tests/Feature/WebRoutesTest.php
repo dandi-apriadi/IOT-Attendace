@@ -241,9 +241,9 @@ class WebRoutesTest extends TestCase
     }
 
     /**
-     * Test edit mahasiswa menampilkan metode pendaftaran yang didukung alat ZKTeco
+     * Test master mahasiswa menyediakan aksi tarik biometrik dari alat ZKTeco
      */
-    public function test_edit_mahasiswa_menampilkan_metode_pendaftaran_zkteco()
+    public function test_master_mahasiswa_menampilkan_aksi_tarik_biometrik_zkteco()
     {
         Device::create([
             'device_id' => 'ZK_X609_1',
@@ -256,15 +256,36 @@ class WebRoutesTest extends TestCase
         ]);
 
         $this->actingAs($this->admin);
-        $response = $this->get("/master/mahasiswa/{$this->mahasiswa->id}/edit");
+        $response = $this->get('/master/mahasiswa');
 
         $response->assertStatus(200)
-            ->assertSee('Metode Pendaftaran')
-            ->assertSee('Kartu RFID')
-            ->assertSee('Sidik Jari')
-            ->assertSee('Kartu RFID + Sidik Jari')
-            ->assertDontSee('<option value="face"', false)
-            ->assertDontSee('<option value="barcode"', false);
+            ->assertSee('Tarik Biometrik dari Alat')
+            ->assertSee('ZKTeco X609 #1')
+            ->assertSee('/master/mahasiswa/pull-biometrics', false)
+            ->assertDontSee('Daftarkan ke Alat');
+    }
+
+    /**
+     * Test perangkat ZKTeco menyediakan aksi pull biometrik mahasiswa terdaftar
+     */
+    public function test_devices_zkteco_menampilkan_aksi_pull_biometrik()
+    {
+        Device::create([
+            'device_id' => 'ZK_X609_1',
+            'name' => 'ZKTeco X609 #1',
+            'type' => 'zkteco',
+            'ip_address' => '192.168.0.10',
+            'port' => 4370,
+            'token_hash' => hash('sha256', 'test-token'),
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($this->admin);
+        $response = $this->get('/master/devices');
+
+        $response->assertStatus(200)
+            ->assertSee('Pull Biometrik')
+            ->assertSee('/master/devices/1/pull-biometrics', false);
     }
 
     /**

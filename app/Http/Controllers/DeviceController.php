@@ -291,6 +291,47 @@ class DeviceController extends Controller
     }
 
     /**
+     * Menarik data kartu dan fingerprint dari perangkat untuk mahasiswa yang
+     * sudah terdaftar di sistem.
+     */
+    public function pullBiometrics(Request $request, Device $device): RedirectResponse
+    {
+        if (! $this->isZkteco($device)) {
+            return back()->with('error', 'Perangkat ini bukan tipe ZKTeco.');
+        }
+
+        try {
+            $result = (new ZktecoService($device))->syncRegisteredStudentBiometrics();
+
+            AuditLogger::log(
+                $request,
+                'pull_biometrics_device',
+                "Tarik biometrik: {$result['updated']} mahasiswa diperbarui dari perangkat " . ($device->name ?: $device->device_id),
+                $request->user()?->id
+            );
+
+            $message = "Tarik biometrik selesai: {$result['updated']} mahasiswa diperbarui, "
+                . "{$result['matched']} cocok dari {$result['scanned']} user alat";
+
+            if ($result['rfid_updated'] > 0 || $result['fingerprint_updated'] > 0) {
+                $message .= " ({$result['rfid_updated']} RFID, {$result['fingerprint_updated']} sidik jari)";
+            }
+            if ($result['unmatched'] > 0) {
+                $message .= ", {$result['unmatched']} belum ada di sistem";
+            }
+            if ($result['conflicts'] > 0) {
+                $message .= ", {$result['conflicts']} konflik kartu";
+
+                return back()->with('error', $message . '. ' . implode(' ', $result['errors']));
+            }
+
+            return back()->with('success', $message . '.');
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Gagal menarik biometrik: ' . $e->getMessage());
+        }
+    }
+
+    /**
      * Menghapus satu user dari perangkat.
      */
     public function removeUser(Request $request, Device $device): RedirectResponse

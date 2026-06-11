@@ -19,11 +19,49 @@
         </div>
     @endif
 
+    @if (session('error'))
+        <div style="margin-bottom: 1rem; background: #fdecec; color: #ba1a1a; padding: 0.75rem 1rem; border-radius: 8px;">
+            {{ session('error') }}
+        </div>
+    @endif
+
     @if ($errors->any())
         <div style="margin-bottom: 1rem; background: #fdecec; color: #ba1a1a; padding: 0.75rem 1rem; border-radius: 8px;">
             {{ $errors->first() }}
         </div>
     @endif
+
+    <div style="margin-bottom:1.25rem; padding:1rem; border-radius:10px; background:#f0fdf4; border:1px solid #bbf7d0;">
+        <div style="display:flex; justify-content:space-between; gap:1rem; align-items:flex-start; flex-wrap:wrap;">
+            <div style="max-width:620px;">
+                <div style="font-weight:800; color:#166534; margin-bottom:0.25rem;">Tarik Biometrik dari Alat</div>
+                <div style="font-size:0.84rem; color:#3f6b4e;">
+                    Daftarkan kartu atau sidik jari langsung di mesin ZKTeco. Setelah itu pilih alat di sini untuk menarik data dan memperbarui mahasiswa yang NIM-nya sudah ada di sistem.
+                </div>
+            </div>
+
+            @if ($zktecoDevices->isNotEmpty())
+                <form action="{{ route('mahasiswa.pull-biometrics') }}" method="POST" onsubmit="return confirm('Tarik kartu dan sidik jari dari alat lalu perbarui mahasiswa yang sudah terdaftar?');" style="display:flex; gap:0.6rem; align-items:flex-end; flex-wrap:wrap; margin:0;">
+                    @csrf
+                    <div>
+                        <label for="biometric_device_id" style="font-size:0.75rem; color:#3f6b4e; display:block; margin-bottom:0.35rem;">Alat ZKTeco</label>
+                        <select id="biometric_device_id" name="device_id" style="min-width:240px; padding:0.7rem; border:none; background:#fff; border-radius:8px;" required>
+                            @foreach ($zktecoDevices as $device)
+                                <option value="{{ $device->id }}">{{ $device->name ?: $device->device_id }} ({{ $device->ip_address }}:{{ $device->port ?: 4370 }})</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <button class="btn-kinetic" type="submit" style="background:#16a34a;">
+                        <i class="fas fa-fingerprint"></i> Tarik & Update Data
+                    </button>
+                </form>
+            @else
+                <div style="font-size:0.82rem; color:#9a3412; background:#fff7ed; border:1px solid #fed7aa; padding:0.7rem 0.8rem; border-radius:8px;">
+                    Belum ada alat ZKTeco aktif. Tambahkan di <a href="{{ route('devices.index') }}" style="color:#166534;">Perangkat IoT</a>.
+                </div>
+            @endif
+        </div>
+    </div>
 
     <form method="GET" action="{{ route('mahasiswa') }}" style="margin-bottom: 1.25rem; display: flex; gap: 0.75rem; flex-wrap: wrap;">
         <input name="q" value="{{ $search }}" type="text" style="flex: 1 1 260px; padding: 0.75rem; border: none; background: #F1F3F5; border-radius: 8px;" placeholder="Cari berdasarkan Nama atau NIM...">
@@ -113,12 +151,4 @@
     </div>
 </div>
 
-<div class="glass-card" style="background: var(--primary-blue-container); color: #fff;">
-    <h3 class="display-font" style="margin-bottom: 1rem;">Registrasi Cepat Hardware</h3>
-    <p style="font-size: 0.9rem; opacity: 0.7; margin-bottom: 1.5rem;">Gunakan perintah API untuk mendaftarkan UID RFID mahasiswa langsung dari perangkat ESP32 di lab.</p>
-    <div style="display: flex; align-items: center; gap: 1rem;">
-        <code style="background: rgba(255, 255, 255, 0.1); padding: 0.75rem 1.5rem; border-radius: 8px; flex-grow: 1;">POST /api/register-tag { "nim": "...", "uid": "..." }</code>
-        <button class="btn-kinetic" style="white-space: nowrap;">KLIK UNTUK COPY</button>
-    </div>
-</div>
 @endsection

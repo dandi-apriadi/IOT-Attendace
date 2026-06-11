@@ -70,6 +70,7 @@ Route::middleware(['auth', 'role:admin,dosen'])->group(function () {
 Route::middleware(['auth', 'role:admin'])->group(function () {
     // Master Data
     Route::get('/master/mahasiswa', [MahasiswaController::class, 'index'])->name('mahasiswa');
+    Route::post('/master/mahasiswa/pull-biometrics', [MahasiswaController::class, 'pullBiometrics'])->name('mahasiswa.pull-biometrics');
     Route::get('/master/mahasiswa/{mahasiswa}', [MahasiswaController::class, 'show'])->name('mahasiswa.show');
     Route::post('/master/mahasiswa', [MahasiswaController::class, 'store'])->name('mahasiswa.store');
     Route::get('/master/mahasiswa/{mahasiswa}/edit', [MahasiswaController::class, 'edit'])->name('mahasiswa.edit');
@@ -127,6 +128,7 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::get('/master/devices/{device}/users', [\App\Http\Controllers\DeviceController::class, 'users'])->name('devices.users');
     Route::post('/master/devices/{device}/import-users', [\App\Http\Controllers\DeviceController::class, 'importUsers'])->name('devices.import-users');
     Route::post('/master/devices/{device}/pull-attendance', [\App\Http\Controllers\DeviceController::class, 'pullAttendance'])->name('devices.pull-attendance');
+    Route::post('/master/devices/{device}/pull-biometrics', [\App\Http\Controllers\DeviceController::class, 'pullBiometrics'])->name('devices.pull-biometrics');
     Route::post('/master/devices/{device}/remove-user', [\App\Http\Controllers\DeviceController::class, 'removeUser'])->name('devices.remove-user');
     Route::post('/master/devices/{device}/clear-attendance', [\App\Http\Controllers\DeviceController::class, 'clearAttendance'])->name('devices.clear-attendance');
     Route::post('/master/devices/{device}/sync-time', [\App\Http\Controllers\DeviceController::class, 'syncTime'])->name('devices.sync-time');
