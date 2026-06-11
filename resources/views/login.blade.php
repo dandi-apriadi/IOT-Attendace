@@ -50,12 +50,15 @@
         }
         .form-control {
             width: 100%;
-            background: rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.2);
             border: none;
             padding: 1rem;
             border-radius: var(--radius-md);
             color: #fff;
             font-family: inherit;
+        }
+        .form-control::placeholder {
+            color: rgba(255, 255, 255, 0.5);
         }
         .form-control:focus {
             outline: 2px solid var(--kinetic-yellow);
