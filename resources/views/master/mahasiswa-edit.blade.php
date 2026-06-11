@@ -85,6 +85,14 @@
                         @endforeach
                     </select>
                 </div>
+                <div style="flex:1; min-width:200px;">
+                    <label for="zk_registration_method" style="font-size:0.75rem; color:#3f6b4e; display:block; margin-bottom:0.4rem;">Metode Pendaftaran</label>
+                    <select id="zk_registration_method" style="width:100%; padding:0.7rem; border:none; background:#fff; border-radius:8px;">
+                        <option value="rfid">Kartu RFID</option>
+                        <option value="fingerprint">Sidik Jari</option>
+                        <option value="rfid_fingerprint" selected>Kartu RFID + Sidik Jari</option>
+                    </select>
+                </div>
                 <button type="button" id="btn-zk-register" class="btn-kinetic" style="background:#16a34a;"><i class="fas fa-id-card"></i> Daftarkan ke Alat</button>
                 <button type="button" id="btn-zk-sync" class="btn-kinetic" style="background:#0ea5e9;"><i class="fas fa-rotate"></i> Sinkronkan dari Alat</button>
             </div>
@@ -329,11 +337,17 @@
     const regBtn = document.getElementById('btn-zk-register');
     const syncBtn = document.getElementById('btn-zk-sync');
     const deviceSelect = document.getElementById('zk_device_id');
+    const methodSelect = document.getElementById('zk_registration_method');
     const statusEl = document.getElementById('zk-reg-status');
-    if (!regBtn || !syncBtn || !deviceSelect) return;
+    if (!regBtn || !syncBtn || !deviceSelect || !methodSelect) return;
 
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     const mahasiswaId = {{ $mahasiswa->id }};
+    const methodLabels = {
+        rfid: 'Kartu RFID',
+        fingerprint: 'Sidik Jari',
+        rfid_fingerprint: 'Kartu RFID + Sidik Jari',
+    };
 
     const setStatus = (msg, isError = false) => {
         statusEl.textContent = msg;
@@ -342,12 +356,18 @@
 
     const call = async (action) => {
         const deviceId = deviceSelect.value;
+        const registrationMethod = methodSelect.value;
         if (!deviceId) { setStatus('Pilih alat ZKTeco dulu.', true); return null; }
         regBtn.disabled = true; syncBtn.disabled = true;
         try {
             const res = await fetch(`/master/mahasiswa/${mahasiswaId}/device/${deviceId}/${action}`, {
                 method: 'POST',
-                headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                },
+                body: JSON.stringify({ registration_method: registrationMethod }),
             });
             return await res.json();
         } catch (e) {
@@ -359,13 +379,13 @@
     };
 
     regBtn.addEventListener('click', async () => {
-        setStatus('Menghubungi alat & mendaftarkan mahasiswa...');
+        setStatus('Menghubungi alat untuk metode ' + (methodLabels[methodSelect.value] || 'terpilih') + '...');
         const data = await call('register');
         if (data) setStatus(data.message || (data.ok ? 'Berhasil.' : 'Gagal.'), !data.ok);
     });
 
     syncBtn.addEventListener('click', async () => {
-        setStatus('Membaca data dari alat...');
+        setStatus('Membaca data ' + (methodLabels[methodSelect.value] || 'terpilih') + ' dari alat...');
         const data = await call('sync');
         if (!data) return;
         if (data.ok && data.updated) {

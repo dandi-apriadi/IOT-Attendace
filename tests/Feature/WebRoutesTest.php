@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\Kelas;
 use App\Models\MataKuliah;
 use App\Models\Mahasiswa;
+use App\Models\Device;
 use App\Models\Jadwal;
 use App\Models\MataKuliahDosenAssignment;
 use Carbon\Carbon;
@@ -237,6 +238,33 @@ class WebRoutesTest extends TestCase
         $this->actingAs($this->admin);
         $response = $this->get("/master/mahasiswa/{$this->mahasiswa->id}");
         $response->assertStatus(200);
+    }
+
+    /**
+     * Test edit mahasiswa menampilkan metode pendaftaran yang didukung alat ZKTeco
+     */
+    public function test_edit_mahasiswa_menampilkan_metode_pendaftaran_zkteco()
+    {
+        Device::create([
+            'device_id' => 'ZK_X609_1',
+            'name' => 'ZKTeco X609 #1',
+            'type' => 'zkteco',
+            'ip_address' => '192.168.0.10',
+            'port' => 4370,
+            'token_hash' => hash('sha256', 'test-token'),
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($this->admin);
+        $response = $this->get("/master/mahasiswa/{$this->mahasiswa->id}/edit");
+
+        $response->assertStatus(200)
+            ->assertSee('Metode Pendaftaran')
+            ->assertSee('Kartu RFID')
+            ->assertSee('Sidik Jari')
+            ->assertSee('Kartu RFID + Sidik Jari')
+            ->assertDontSee('<option value="face"', false)
+            ->assertDontSee('<option value="barcode"', false);
     }
 
     /**

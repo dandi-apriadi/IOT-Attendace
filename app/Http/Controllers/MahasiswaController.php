@@ -88,6 +88,12 @@ class MahasiswaController extends Controller
      */
     public function registerToDevice(Request $request, Mahasiswa $mahasiswa, Device $device): JsonResponse
     {
+        $data = $request->validate([
+            'registration_method' => ['nullable', Rule::in(['rfid', 'fingerprint', 'rfid_fingerprint'])],
+        ]);
+        $method = $data['registration_method'] ?? 'rfid_fingerprint';
+        $methodLabel = $this->zktecoRegistrationMethodLabel($method);
+
         if ($device->type !== 'zkteco' || empty($device->ip_address)) {
             return response()->json(['ok' => false, 'message' => 'Perangkat bukan tipe ZKTeco / tanpa IP.'], 422);
         }
@@ -104,7 +110,7 @@ class MahasiswaController extends Controller
 
             return response()->json([
                 'ok' => true,
-                'message' => 'Mahasiswa terdaftar di alat (UID ' . $mahasiswa->id . ', userid ' . $mahasiswa->nim . '). Silakan enroll sidik jari/kartu langsung di mesin, lalu klik "Sinkronkan dari Alat".',
+                'message' => 'Mahasiswa terdaftar di alat untuk metode ' . $methodLabel . ' (UID ' . $mahasiswa->id . ', userid ' . $mahasiswa->nim . '). Silakan enroll di mesin, lalu klik "Sinkronkan dari Alat".',
             ]);
         } catch (\Throwable $e) {
             return response()->json(['ok' => false, 'message' => 'Gagal mendaftarkan: ' . $e->getMessage()], 200);
@@ -116,6 +122,11 @@ class MahasiswaController extends Controller
      */
     public function syncFromDevice(Request $request, Mahasiswa $mahasiswa, Device $device): JsonResponse
     {
+        $data = $request->validate([
+            'registration_method' => ['nullable', Rule::in(['rfid', 'fingerprint', 'rfid_fingerprint'])],
+        ]);
+        $method = $data['registration_method'] ?? 'rfid_fingerprint';
+
         if ($device->type !== 'zkteco' || empty($device->ip_address)) {
             return response()->json(['ok' => false, 'message' => 'Perangkat bukan tipe ZKTeco / tanpa IP.'], 422);
         }
@@ -131,11 +142,18 @@ class MahasiswaController extends Controller
             }
 
             $updates = [];
-            if (! empty($data['cardno'])) {
-                $updates['rfid_uid'] = $data['cardno'];
+            $requestedLabels = [];
+            if (in_array($method, ['rfid', 'rfid_fingerprint'], true)) {
+                $requestedLabels[] = 'Kartu RFID';
+                if (! empty($data['cardno'])) {
+                    $updates['rfid_uid'] = $data['cardno'];
+                }
             }
-            if ($data['has_fingerprint']) {
-                $updates['fingerprint_data'] = 'enrolled@' . $device->device_id;
+            if (in_array($method, ['fingerprint', 'rfid_fingerprint'], true)) {
+                $requestedLabels[] = 'Sidik Jari';
+                if ($data['has_fingerprint']) {
+                    $updates['fingerprint_data'] = 'enrolled@' . $device->device_id;
+                }
             }
 
             if (! empty($updates)) {
@@ -155,8 +173,8 @@ class MahasiswaController extends Controller
                 'has_fingerprint' => $data['has_fingerprint'],
                 'updated' => $updates,
                 'message' => empty($updates)
-                    ? 'Mahasiswa terdaftar, tapi belum ada kartu/sidik jari yang di-enroll di alat.'
-                    : 'Data tersinkron dari alat: ' . implode(', ', array_keys($updates)) . '.',
+                    ? 'Mahasiswa terdaftar, tapi data ' . implode(' dan ', $requestedLabels) . ' belum di-enroll di alat.'
+                    : 'Data tersinkron dari alat: ' . implode(', ', $this->zktecoUpdatedLabels($updates)) . '.',
             ]);
         } catch (\Throwable $e) {
             return response()->json(['ok' => false, 'message' => 'Gagal sinkronisasi: ' . $e->getMessage()], 200);
@@ -378,5 +396,31 @@ class MahasiswaController extends Controller
                 Rule::unique('mahasiswa', 'barcode_id')->ignore($mahasiswaId),
             ],
         ]);
+    }
+
+    private function zktecoRegistrationMethodLabel(string $method): string
+    {
+        return match ($method) {
+            'rfid' => 'Kartu RFID',
+            'fingerprint' => 'Sidik Jari',
+            default => 'Kartu RFID + Sidik Jari',
+        };
+    }
+
+    /**
+     * @param array<string, string> $updates
+     * @return array<int, string>
+     */
+    private function zktecoUpdatedLabels(array $updates): array
+    {
+        $labels = [];
+        if (array_key_exists('rfid_uid', $updates)) {
+            $labels[] = 'Kartu RFID';
+        }
+        if (array_key_exists('fingerprint_data', $updates)) {
+            $labels[] = 'Sidik Jari';
+        }
+
+        return $labels;
     }
 }
