@@ -1,14 +1,29 @@
 @extends('layouts.app')
 
 @section('content')
+@php
+    $hasCustomEnrollmentDevices = $activeDevices->isNotEmpty();
+    $hasZktecoDevices = $zktecoDevices->isNotEmpty();
+@endphp
 <div class="glass-card" style="max-width: 900px; margin: 0 auto;">
     <h3 class="display-font" style="margin-bottom: 1rem;">Edit Mahasiswa</h3>
 
+    @if (! $hasCustomEnrollmentDevices && ! $hasZktecoDevices)
+        <div style="margin-bottom:1rem; padding:0.9rem; border-radius:10px; background:#fff7ed; border:1px solid #fed7aa;">
+            <div style="font-weight:700; color:#9a3412; margin-bottom:0.25rem;">Belum Ada Alat Registrasi Aktif</div>
+            <div style="font-size:0.82rem; color:#7c2d12;">
+                Tambahkan perangkat di <a href="{{ route('devices.index') }}" style="color:#166534;">Master Data &rarr; Perangkat IoT</a>.
+                Gunakan tipe Custom IoT untuk alat HTTP/heartbeat, atau tipe ZKTeco untuk mesin fingerprint/kartu dengan IP.
+            </div>
+        </div>
+    @endif
+
+    @if ($hasCustomEnrollmentDevices)
     <div style="margin-bottom:1rem; padding:0.9rem; border-radius:10px; background:#eef8ff; border:1px solid #cae7ff;">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:0.8rem; flex-wrap:wrap;">
             <div>
-                <div style="font-weight:700; color:#124b77; margin-bottom:0.2rem;">Sinkronisasi Registrasi IoT</div>
-                <div style="font-size:0.82rem; color:#2f5b7b;">Alur: pilih tipe data -> pilih perangkat aktif -> mulai registrasi -> perangkat capture -> data tersimpan otomatis.</div>
+                <div style="font-weight:700; color:#124b77; margin-bottom:0.2rem;">Registrasi via Custom IoT (HTTP)</div>
+                <div style="font-size:0.82rem; color:#2f5b7b;">Untuk alat buatan sendiri yang mengirim heartbeat. Pilih perangkat online, lalu alat akan capture data sesuai perintah.</div>
             </div>
         </div>
 
@@ -48,8 +63,10 @@
             <span id="enrollment-status" style="font-size:0.82rem; color:#2f5b7b;">Menunggu aksi.</span>
         </div>
     </div>
+    @endif
 
     {{-- Registrasi via Alat ZKTeco (koneksi langsung, mis. Solution X609) --}}
+    @if ($hasZktecoDevices)
     <div style="margin-bottom:1rem; padding:0.9rem; border-radius:10px; background:#f0fdf4; border:1px solid #bbf7d0;">
         <div style="font-weight:700; color:#166534; margin-bottom:0.2rem;">Registrasi via Alat ZKTeco (Fingerprint / Kartu)</div>
         <div style="font-size:0.82rem; color:#3f6b4e; margin-bottom:0.75rem;">
@@ -74,6 +91,7 @@
             <div id="zk-reg-status" style="margin-top:0.6rem; font-size:0.82rem; color:#3f6b4e;">Pilih alat lalu daftarkan.</div>
         @endif
     </div>
+    @endif
 
     @if ($errors->any())
         <div style="margin-bottom: 1rem; background: #fdecec; color: #ba1a1a; padding: 0.75rem 1rem; border-radius: 8px;">
