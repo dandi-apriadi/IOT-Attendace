@@ -11,6 +11,13 @@ app/storage/
 public/storage
 public/hot
 public/build
+bootstrap/cache/*.php
+
+# Agent relay lokal (deps & rahasia)
+/tools/agent/vendor/
+/tools/agent/.env
+/tools/agent/composer.lock
+/tools/cloudflared.exe
 
 storage/*.key
 .env

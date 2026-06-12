@@ -96,7 +96,7 @@
             <button type="submit" class="btn-kinetic login-btn">MASUK SEKARANG</button>
         </form>
         
-        <p style="margin-top: 2rem; font-size: 0.8rem; opacity: 0.5;">Design by dandi-apriadi</p>
+        <p style="margin-top: 2rem; font-size: 0.8rem; opacity: 0.5;">Design by iot-project</p>
     </div>
 </body>
 </html>

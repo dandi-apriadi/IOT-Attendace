@@ -11,10 +11,14 @@ Schedule::command('backup:database-local --keep=7')
     ->dailyAt('23:30')
     ->withoutOverlapping();
 
-Schedule::command('zkteco:pull')
-    ->everyFiveMinutes()
-    ->withoutOverlapping()
-    ->appendOutputTo(storage_path('logs/zkteco-pull.log'));
+// Hanya jalankan penarikan langsung saat aplikasi satu jaringan dengan alat
+// (mode standalone). Di VPS (mode server) absensi masuk via push dari agent.
+if (config('agent.role') === 'standalone') {
+    Schedule::command('zkteco:pull')
+        ->everyFiveMinutes()
+        ->withoutOverlapping()
+        ->appendOutputTo(storage_path('logs/zkteco-pull.log'));
+}
 
 Schedule::command('students:promote-semester --execute --due-only')
     ->dailyAt('00:30')

@@ -1,0 +1,17 @@
+{
+    "name": "elektropolimdo/zkteco-agent",
+    "description": "Agent relay standalone: jembatan antara alat ZKTeco di LAN dan server elektropolimdo.com",
+    "type": "project",
+    "license": "MIT",
+    "require": {
+        "php": "^8.1",
+        "jmrashed/zkteco": "^1.2",
+        "guzzlehttp/guzzle": "^7.5",
+        "vlucas/phpdotenv": "^5.5"
+    },
+    "config": {
+        "allow-plugins": {
+            "php-http/discovery": true
+        }
+    }
+}

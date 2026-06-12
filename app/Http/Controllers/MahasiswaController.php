@@ -7,6 +7,7 @@ use App\Models\DeviceEnrollmentJob;
 use App\Models\Kelas;
 use App\Models\Mahasiswa;
 use App\Services\AuditLogger;
+use App\Services\DeviceCommandService;
 use App\Services\ZktecoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -89,6 +90,19 @@ class MahasiswaController extends Controller
             return back()->with('error', 'Pilih perangkat ZKTeco aktif yang memiliki IP.');
         }
 
+        if ($this->usesAgentRelay()) {
+            app(DeviceCommandService::class)->enqueue($device, 'pull_biometrics', [], $request->user()?->id);
+
+            AuditLogger::log(
+                $request,
+                'pull_biometrics_mahasiswa',
+                'Antre tarik biometrik mahasiswa dari perangkat ' . ($device->name ?: $device->device_id) . ' (via agent)',
+                $request->user()?->id
+            );
+
+            return back()->with('success', 'Perintah tarik biometrik dikirim ke agent lokal. Data mahasiswa akan diperbarui setelah agent membaca alat.');
+        }
+
         try {
             $result = (new ZktecoService($device))->syncRegisteredStudentBiometrics();
 
@@ -165,6 +179,24 @@ class MahasiswaController extends Controller
             return response()->json(['ok' => false, 'message' => 'Perangkat bukan tipe ZKTeco / tanpa IP.'], 422);
         }
 
+        if ($this->usesAgentRelay()) {
+            $commands = app(DeviceCommandService::class);
+            $commands->enqueue($device, 'push_user', $commands->buildSingleUserPayload($mahasiswa, $method), $request->user()?->id);
+
+            AuditLogger::log(
+                $request,
+                'register_mahasiswa_device',
+                'Antre daftarkan ' . $mahasiswa->nama . ' (' . $mahasiswa->nim . ') ke perangkat ' . ($device->name ?: $device->device_id) . ' (via agent)',
+                $request->user()?->id
+            );
+
+            return response()->json([
+                'ok' => true,
+                'queued' => true,
+                'message' => 'Perintah pendaftaran ' . $methodLabel . ' dikirim ke agent lokal. Setelah agent menjalankannya, enroll di mesin, lalu klik "Sinkronkan dari Alat".',
+            ]);
+        }
+
         try {
             (new ZktecoService($device))->pushUser($mahasiswa);
 
@@ -196,6 +228,28 @@ class MahasiswaController extends Controller
 
         if ($device->type !== 'zkteco' || empty($device->ip_address)) {
             return response()->json(['ok' => false, 'message' => 'Perangkat bukan tipe ZKTeco / tanpa IP.'], 422);
+        }
+
+        if ($this->usesAgentRelay()) {
+            $commands = app(DeviceCommandService::class);
+            $commands->enqueue($device, 'read_user', [
+                'uid' => (int) $mahasiswa->id,
+                'mahasiswa_id' => (int) $mahasiswa->id,
+                'method' => $method,
+            ], $request->user()?->id);
+
+            AuditLogger::log(
+                $request,
+                'sync_mahasiswa_device',
+                'Antre sinkronisasi data ' . $mahasiswa->nama . ' dari perangkat ' . ($device->name ?: $device->device_id) . ' (via agent)',
+                $request->user()?->id
+            );
+
+            return response()->json([
+                'ok' => true,
+                'queued' => true,
+                'message' => 'Perintah baca data dari alat dikirim ke agent lokal. Data kartu/sidik jari akan terisi otomatis setelah agent membacanya — muat ulang halaman sebentar lagi.',
+            ]);
         }
 
         try {

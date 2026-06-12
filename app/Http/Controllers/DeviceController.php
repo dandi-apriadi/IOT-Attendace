@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\Device;
+use App\Models\DeviceCommand;
 use App\Models\Kelas;
 use App\Models\Mahasiswa;
 use App\Services\AuditLogger;
+use App\Services\DeviceCommandService;
 use App\Services\ZktecoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -152,24 +154,49 @@ class DeviceController extends Controller
     /**
      * Tes koneksi ke perangkat (dipanggil via fetch dari UI).
      */
-    public function testConnection(Device $device): JsonResponse
+    public function testConnection(Request $request, Device $device): JsonResponse
     {
         if (! $this->isZkteco($device)) {
             return response()->json(['ok' => false, 'message' => 'Perangkat ini bukan tipe ZKTeco.'], 422);
         }
 
+        if ($this->usesAgentRelay()) {
+            app(DeviceCommandService::class)->enqueue($device, 'get_info', [], $request->user()?->id);
+
+            return response()->json([
+                'ok' => true,
+                'queued' => true,
+                'message' => 'Perintah cek koneksi dikirim ke agent lokal. Hasil tersedia setelah agent menjalankannya.',
+            ]);
+        }
+
         $result = (new ZktecoService($device))->testConnection();
 
-        return response()->json($result, $result['ok'] ? 200 : 200);
+        return response()->json($result, 200);
     }
 
     /**
      * Mengambil info perangkat (versi, serial, nama, waktu).
      */
-    public function info(Device $device): JsonResponse
+    public function info(Request $request, Device $device): JsonResponse
     {
         if (! $this->isZkteco($device)) {
             return response()->json(['ok' => false, 'message' => 'Perangkat ini bukan tipe ZKTeco.'], 422);
+        }
+
+        if ($this->usesAgentRelay()) {
+            // Tampilkan hasil get_info terakhir bila ada, lalu antrekan yang baru.
+            $last = $this->latestDoneResult($device, 'get_info');
+            app(DeviceCommandService::class)->enqueue($device, 'get_info', [], $request->user()?->id);
+
+            return response()->json([
+                'ok' => true,
+                'queued' => true,
+                'info' => $last,
+                'message' => $last
+                    ? 'Menampilkan info terakhir dari agent. Perintah refresh dikirim.'
+                    : 'Perintah ambil info dikirim ke agent lokal. Muat ulang sebentar lagi.',
+            ]);
         }
 
         try {
@@ -188,6 +215,21 @@ class DeviceController extends Controller
     {
         if (! $this->isZkteco($device)) {
             return back()->with('error', 'Perangkat ini bukan tipe ZKTeco.');
+        }
+
+        if ($this->usesAgentRelay()) {
+            $commands = app(DeviceCommandService::class);
+            $payload = $commands->buildAllUsersPayload();
+            $commands->enqueue($device, 'push_all_users', $payload, $request->user()?->id);
+
+            AuditLogger::log(
+                $request,
+                'sync_users_device',
+                'Antre sinkronisasi ' . count($payload['users']) . ' user ke perangkat ' . ($device->name ?: $device->device_id) . ' (via agent)',
+                $request->user()?->id
+            );
+
+            return back()->with('success', 'Perintah sinkronisasi ' . count($payload['users']) . ' user dikirim ke agent lokal, menunggu eksekusi.');
         }
 
         try {
@@ -219,7 +261,7 @@ class DeviceController extends Controller
     /**
      * Menampilkan daftar user yang ada di perangkat.
      */
-    public function users(Device $device): View
+    public function users(Request $request, Device $device): View
     {
         if (! $this->isZkteco($device)) {
             abort(404);
@@ -228,10 +270,21 @@ class DeviceController extends Controller
         $deviceUsers = [];
         $error = null;
 
-        try {
-            $deviceUsers = (new ZktecoService($device))->pullUsers();
-        } catch (\Throwable $e) {
-            $error = $e->getMessage();
+        if ($this->usesAgentRelay()) {
+            // Ambil daftar user dari hasil pull_users terakhir; antrekan refresh.
+            $result = $this->latestDoneResult($device, 'pull_users');
+            $deviceUsers = $this->matchDeviceUsers($result['users'] ?? []);
+            app(DeviceCommandService::class)->enqueue($device, 'pull_users', [], $request->user()?->id);
+
+            if (empty($deviceUsers)) {
+                $error = 'Belum ada data user dari agent. Perintah ambil user dikirim — muat ulang halaman ini sebentar lagi.';
+            }
+        } else {
+            try {
+                $deviceUsers = (new ZktecoService($device))->pullUsers();
+            } catch (\Throwable $e) {
+                $error = $e->getMessage();
+            }
         }
 
         return view('master.devices-users', [
@@ -256,7 +309,16 @@ class DeviceController extends Controller
         ]);
 
         try {
-            $users = (new ZktecoService($device))->pullUsers();
+            if ($this->usesAgentRelay()) {
+                $result = $this->latestDoneResult($device, 'pull_users');
+                $users = $this->matchDeviceUsers($result['users'] ?? []);
+
+                if (empty($users)) {
+                    return back()->with('error', 'Belum ada data user dari agent. Buka "Lihat Users" dulu agar agent menariknya, lalu coba lagi.');
+                }
+            } else {
+                $users = (new ZktecoService($device))->pullUsers();
+            }
             $created = 0;
 
             foreach ($users as $u) {
@@ -304,6 +366,12 @@ class DeviceController extends Controller
             return back()->with('error', 'Perangkat ini bukan tipe ZKTeco.');
         }
 
+        if ($this->usesAgentRelay()) {
+            app(DeviceCommandService::class)->enqueue($device, 'pull_attendance', [], $request->user()?->id);
+
+            return back()->with('success', 'Perintah tarik absensi dikirim ke agent lokal. Absensi akan masuk otomatis setelah agent menjalankannya.');
+        }
+
         try {
             $result = (new ZktecoService($device))->importAttendance();
 
@@ -328,6 +396,12 @@ class DeviceController extends Controller
     {
         if (! $this->isZkteco($device)) {
             return back()->with('error', 'Perangkat ini bukan tipe ZKTeco.');
+        }
+
+        if ($this->usesAgentRelay()) {
+            app(DeviceCommandService::class)->enqueue($device, 'pull_biometrics', [], $request->user()?->id);
+
+            return back()->with('success', 'Perintah tarik biometrik dikirim ke agent lokal. Data kartu/sidik jari mahasiswa akan diperbarui setelah agent membaca alat.');
         }
 
         try {
@@ -374,6 +448,19 @@ class DeviceController extends Controller
             'uid' => ['required', 'integer', 'min:1'],
         ]);
 
+        if ($this->usesAgentRelay()) {
+            app(DeviceCommandService::class)->enqueue($device, 'remove_user', ['uid' => (int) $validated['uid']], $request->user()?->id);
+
+            AuditLogger::log(
+                $request,
+                'remove_user_device',
+                "Antre hapus user uid {$validated['uid']} dari perangkat " . ($device->name ?: $device->device_id) . ' (via agent)',
+                $request->user()?->id
+            );
+
+            return back()->with('success', "Perintah hapus user uid {$validated['uid']} dikirim ke agent lokal.");
+        }
+
         try {
             (new ZktecoService($device))->removeUser((int) $validated['uid']);
 
@@ -397,6 +484,19 @@ class DeviceController extends Controller
     {
         if (! $this->isZkteco($device)) {
             return back()->with('error', 'Perangkat ini bukan tipe ZKTeco.');
+        }
+
+        if ($this->usesAgentRelay()) {
+            app(DeviceCommandService::class)->enqueue($device, 'clear_attendance', [], $request->user()?->id);
+
+            AuditLogger::log(
+                $request,
+                'clear_attendance_device',
+                'Antre kosongkan log absensi perangkat ' . ($device->name ?: $device->device_id) . ' (via agent)',
+                $request->user()?->id
+            );
+
+            return back()->with('success', 'Perintah kosongkan log absensi dikirim ke agent lokal.');
         }
 
         try {
@@ -424,6 +524,19 @@ class DeviceController extends Controller
             return back()->with('error', 'Perangkat ini bukan tipe ZKTeco.');
         }
 
+        if ($this->usesAgentRelay()) {
+            app(DeviceCommandService::class)->enqueue($device, 'sync_time', [], $request->user()?->id);
+
+            AuditLogger::log(
+                $request,
+                'sync_time_device',
+                'Antre sinkronisasi waktu perangkat ' . ($device->name ?: $device->device_id) . ' (via agent)',
+                $request->user()?->id
+            );
+
+            return back()->with('success', 'Perintah sinkronisasi waktu dikirim ke agent lokal.');
+        }
+
         try {
             (new ZktecoService($device))->syncTime();
 
@@ -443,5 +556,62 @@ class DeviceController extends Controller
     private function isZkteco(Device $device): bool
     {
         return $device->type === 'zkteco' && ! empty($device->ip_address);
+    }
+
+    /**
+     * Mengambil payload result dari command tipe tertentu yang terakhir selesai.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function latestDoneResult(Device $device, string $type): ?array
+    {
+        $command = DeviceCommand::query()
+            ->where('device_id', $device->id)
+            ->where('type', $type)
+            ->where('status', 'done')
+            ->latest('completed_at')
+            ->first();
+
+        return $command?->result;
+    }
+
+    /**
+     * Menandai daftar user mentah (dari agent) dengan status match terhadap
+     * data Mahasiswa — setara hasil ZktecoService::pullUsers untuk view.
+     *
+     * @param array<int, array<string, mixed>> $users
+     * @return array<int, array<string, mixed>>
+     */
+    private function matchDeviceUsers(array $users): array
+    {
+        if (empty($users)) {
+            return [];
+        }
+
+        $userIds = array_values(array_filter(array_unique(
+            array_map(fn ($u) => trim((string) ($u['userid'] ?? '')), $users)
+        )));
+
+        $matched = Mahasiswa::query()
+            ->whereIn('nim', $userIds)
+            ->orWhereIn('rfid_uid', $userIds)
+            ->get(['id', 'nim', 'nama', 'rfid_uid']);
+
+        $rows = [];
+        foreach ($users as $u) {
+            $userid = trim((string) ($u['userid'] ?? ''));
+            $mhs = $matched->first(fn ($m) => (string) $m->nim === $userid || (string) $m->rfid_uid === $userid);
+
+            $rows[] = [
+                'uid' => (int) ($u['uid'] ?? 0),
+                'userid' => $userid,
+                'name' => trim((string) ($u['name'] ?? '')),
+                'role' => (int) ($u['role'] ?? 0),
+                'matched' => (bool) $mhs,
+                'mahasiswa_nama' => $mhs?->nama,
+            ];
+        }
+
+        return $rows;
     }
 }

@@ -22,7 +22,7 @@ class LoadTestAbsensi extends Command
 
         $baseUrl = rtrim((string) config('app.url', 'http://127.0.0.1:8000'), '/');
         $endpoint = $baseUrl . '/api/absensi';
-        $identifier = '00ACFC25';
+        $identifier = '0000002000';
         $token = (string) env('DEVICE_API_TOKEN', 'change-this-token-for-iot-devices');
 
         $mahasiswa = Mahasiswa::query()->where('rfid_uid', $identifier)->first();
@@ -75,7 +75,7 @@ class LoadTestAbsensi extends Command
                         ])
                         ->timeout(10)
                         ->post($endpoint, [
-                            'identifier' => '00ACFC25',
+                            'identifier' => '0000002000',
                             'type' => 'RFID',
                         ]);
                 }
