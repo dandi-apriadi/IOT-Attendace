@@ -26,31 +26,43 @@
         </div>
     @endif
 
-    <!-- Add Semester Form -->
     <div class="glass-card" style="background: #f8fafc; padding: 1.25rem; margin-bottom: 2rem;">
-        <h4 class="display-font" style="font-size: 0.9rem; margin-bottom: 1rem; color: var(--text-muted); text-transform: uppercase;">Tambah Semester Baru</h4>
-        <form action="{{ route('semester.store') }}" method="POST" style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap: 0.75rem; align-items: end;">
-            @csrf
-            <div>
-                <label style="display:block; font-size:0.74rem; font-weight:700; margin-bottom:0.35rem; color:#6b7280;">Nama Semester</label>
-                <input name="nama_semester" type="text" placeholder="Ganjil/Genap" class="form-input" required>
+        @if ($semesterList->total() === 0)
+            <h4 class="display-font" style="font-size: 0.9rem; margin-bottom: 1rem; color: var(--text-muted); text-transform: uppercase;">Tambah Semester Awal</h4>
+            <form action="{{ route('semester.store') }}" method="POST" style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap: 0.75rem; align-items: end;">
+                @csrf
+                <div>
+                    <label style="display:block; font-size:0.74rem; font-weight:700; margin-bottom:0.35rem; color:#6b7280;">Nama Semester</label>
+                    <input name="nama_semester" type="text" placeholder="Semester Ganjil" class="form-input" required>
+                </div>
+                <div>
+                    <label style="display:block; font-size:0.74rem; font-weight:700; margin-bottom:0.35rem; color:#6b7280;">Tahun Ajaran</label>
+                    <input name="tahun_ajaran" type="text" placeholder="2025/2026" class="form-input" required>
+                </div>
+                <div>
+                    <label style="display:block; font-size:0.74rem; font-weight:700; margin-bottom:0.35rem; color:#6b7280;">Tanggal Mulai</label>
+                    <input name="tanggal_mulai" type="date" class="form-input" required>
+                </div>
+                <div>
+                    <label style="display:block; font-size:0.74rem; font-weight:700; margin-bottom:0.35rem; color:#6b7280;">Tanggal Selesai</label>
+                    <input name="tanggal_selesai" type="date" class="form-input" required>
+                </div>
+                <div style="display:flex; align-items:flex-end;">
+                    <button class="btn-kinetic" type="submit"><i class="fas fa-plus"></i> Simpan Semester Awal</button>
+                </div>
+            </form>
+        @else
+            <div style="display:flex; justify-content:space-between; gap:1rem; align-items:center; flex-wrap:wrap;">
+                <div>
+                    <h4 class="display-font" style="font-size: 0.9rem; margin-bottom: 0.35rem; color: var(--text-muted); text-transform: uppercase;">Generate Semester Berikutnya</h4>
+                    <p style="margin:0; color:#6b7280; font-size:0.85rem;">Semester terakhir: {{ $latestSemester?->display_name ?? '-' }} sampai {{ $latestSemester?->tanggal_selesai?->format('d M Y') ?? '-' }}.</p>
+                </div>
+                <form action="{{ route('semester.store') }}" method="POST" style="margin:0;">
+                    @csrf
+                    <button class="btn-kinetic" type="submit"><i class="fas fa-plus"></i> Generate Otomatis</button>
+                </form>
             </div>
-            <div>
-                <label style="display:block; font-size:0.74rem; font-weight:700; margin-bottom:0.35rem; color:#6b7280;">Tahun Ajaran</label>
-                <input name="tahun_ajaran" type="text" placeholder="2025/2026" class="form-input" required>
-            </div>
-            <div>
-                <label style="display:block; font-size:0.74rem; font-weight:700; margin-bottom:0.35rem; color:#6b7280;">Tanggal Mulai</label>
-                <input name="tanggal_mulai" type="date" class="form-input" required>
-            </div>
-            <div>
-                <label style="display:block; font-size:0.74rem; font-weight:700; margin-bottom:0.35rem; color:#6b7280;">Tanggal Selesai</label>
-                <input name="tanggal_selesai" type="date" class="form-input" required>
-            </div>
-            <div style="display:flex; align-items:flex-end;">
-                <button class="btn-kinetic" type="submit"><i class="fas fa-plus"></i> Simpan</button>
-            </div>
-        </form>
+        @endif
     </div>
 
     <!-- Semester List Table -->

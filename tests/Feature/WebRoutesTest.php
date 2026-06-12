@@ -11,6 +11,7 @@ use App\Models\Device;
 use App\Models\Jadwal;
 use App\Models\Absensi;
 use App\Models\MataKuliahDosenAssignment;
+use App\Models\SemesterAkademik;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
@@ -461,6 +462,97 @@ class WebRoutesTest extends TestCase
             'fingerprint_data' => null,
             'face_model_data' => null,
         ]);
+    }
+
+    public function test_admin_hanya_membuat_semester_awal_dari_form(): void
+    {
+        SemesterAkademik::query()->delete();
+
+        $this->actingAs($this->admin);
+
+        $response = $this->post('/master/semester', [
+            'nama_semester' => 'Semester Ganjil',
+            'tahun_ajaran' => '2025/2026',
+            'tanggal_mulai' => '2025-08-01',
+            'tanggal_selesai' => '2026-01-31',
+        ]);
+
+        $response->assertRedirect('/master/semester');
+
+        $this->assertSame(1, SemesterAkademik::count());
+        $semester = SemesterAkademik::firstOrFail();
+        $this->assertSame('Semester Ganjil', $semester->nama_semester);
+        $this->assertSame('2025/2026', $semester->tahun_ajaran);
+        $this->assertSame('2025-08-01', $semester->tanggal_mulai->toDateString());
+        $this->assertSame('2026-01-31', $semester->tanggal_selesai->toDateString());
+        $this->assertTrue($semester->is_active);
+    }
+
+    public function test_submit_semester_setelah_awal_menghasilkan_semester_berikutnya_otomatis(): void
+    {
+        SemesterAkademik::query()->delete();
+        SemesterAkademik::create([
+            'nama_semester' => 'Semester Ganjil',
+            'tahun_ajaran' => '2025/2026',
+            'tanggal_mulai' => '2025-08-01',
+            'tanggal_selesai' => '2026-01-31',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($this->admin);
+
+        $response = $this->post('/master/semester', [
+            'nama_semester' => 'Semester Manual Salah',
+            'tahun_ajaran' => '2030/2031',
+            'tanggal_mulai' => '2030-01-01',
+            'tanggal_selesai' => '2030-06-30',
+        ]);
+
+        $response->assertRedirect('/master/semester');
+
+        $this->assertSame(2, SemesterAkademik::count());
+        $generatedSemester = SemesterAkademik::query()
+            ->orderByDesc('tanggal_mulai')
+            ->firstOrFail();
+        $this->assertSame('Semester Genap', $generatedSemester->nama_semester);
+        $this->assertSame('2025/2026', $generatedSemester->tahun_ajaran);
+        $this->assertSame('2026-02-01', $generatedSemester->tanggal_mulai->toDateString());
+        $this->assertSame('2026-07-31', $generatedSemester->tanggal_selesai->toDateString());
+        $this->assertFalse($generatedSemester->is_active);
+        $this->assertDatabaseMissing('semester_akademik', [
+            'nama_semester' => 'Semester Manual Salah',
+            'tahun_ajaran' => '2030/2031',
+        ]);
+    }
+
+    public function test_generate_semester_berikutnya_menaikkan_tahun_ajaran_setelah_genap(): void
+    {
+        SemesterAkademik::query()->delete();
+        SemesterAkademik::create([
+            'nama_semester' => 'Semester Genap',
+            'tahun_ajaran' => '2025/2026',
+            'tanggal_mulai' => '2026-02-01',
+            'tanggal_selesai' => '2026-07-31',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($this->admin);
+
+        $this->post('/master/semester', [
+            'nama_semester' => 'Tidak Dipakai',
+            'tahun_ajaran' => '2030/2031',
+            'tanggal_mulai' => '2030-01-01',
+            'tanggal_selesai' => '2030-06-30',
+        ])->assertRedirect('/master/semester');
+
+        $generatedSemester = SemesterAkademik::query()
+            ->orderByDesc('tanggal_mulai')
+            ->firstOrFail();
+
+        $this->assertSame('Semester Ganjil', $generatedSemester->nama_semester);
+        $this->assertSame('2026/2027', $generatedSemester->tahun_ajaran);
+        $this->assertSame('2026-08-01', $generatedSemester->tanggal_mulai->toDateString());
+        $this->assertSame('2027-01-31', $generatedSemester->tanggal_selesai->toDateString());
     }
 
     /**

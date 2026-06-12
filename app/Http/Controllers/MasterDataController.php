@@ -11,6 +11,7 @@ use App\Models\MataKuliahDosenAssignment;
 use App\Models\SemesterAkademik;
 use App\Models\User;
 use App\Services\AuditLogger;
+use App\Services\AcademicSemesterSequenceService;
 use App\Services\SemesterPromotionService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -754,36 +755,45 @@ class MasterDataController extends Controller
 
         return view('master.semester', [
             'semesterList' => $semesterList,
+            'latestSemester' => SemesterAkademik::query()
+                ->orderByDesc('tanggal_mulai')
+                ->orderByDesc('id')
+                ->first(),
         ]);
     }
 
-    public function storeSemester(Request $request): RedirectResponse
+    public function storeSemester(Request $request, AcademicSemesterSequenceService $semesterSequence): RedirectResponse
     {
+        if (SemesterAkademik::query()->exists()) {
+            $semester = $semesterSequence->createNext();
+
+            AuditLogger::log(
+                $request,
+                'generate_semester',
+                'Membuat semester otomatis ' . $semester->display_name,
+                $request->user()?->id
+            );
+
+            return redirect()->route('semester')->with('success', 'Semester berikutnya berhasil dibuat otomatis.');
+        }
+
         $data = $request->validate([
             'nama_semester' => ['required', 'string', 'max:50'],
             'tahun_ajaran' => ['required', 'string', 'max:20'],
             'tanggal_mulai' => ['required', 'date'],
             'tanggal_selesai' => ['required', 'date', 'after:tanggal_mulai'],
-            'is_active' => ['nullable', 'boolean'],
         ]);
 
-        // If setting as active, deactivate all others
-        if (!empty($data['is_active'])) {
-            SemesterAkademik::query()->update(['is_active' => false]);
-        } else {
-            $data['is_active'] = false;
-        }
-
-        $semester = SemesterAkademik::create($data);
+        $semester = $semesterSequence->createInitial($data);
 
         AuditLogger::log(
             $request,
             'tambah_semester',
-            'Menambahkan semester ' . $semester->display_name,
+            'Menambahkan semester awal ' . $semester->display_name,
             $request->user()?->id
         );
 
-        return redirect()->route('semester')->with('success', 'Semester berhasil ditambahkan.');
+        return redirect()->route('semester')->with('success', 'Semester awal berhasil ditambahkan.');
     }
 
     public function editSemester(string $id): View
