@@ -54,6 +54,7 @@ git -C "$APP_DIR" pull --ff-only origin main
 
 cd "$APP_DIR"
 composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader
+mkdir -p storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs bootstrap/cache
 
 if [[ ! -f .env ]]; then
   cp .env.example .env
