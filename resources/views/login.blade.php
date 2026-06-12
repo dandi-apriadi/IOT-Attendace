@@ -45,9 +45,11 @@
             z-index: 50;
             align-items: center;
             justify-content: center;
-            padding: 0;
+            padding: clamp(18px, 4vw, 44px);
             overflow: hidden;
-            background: oklch(98% 0.006 190);
+            background:
+                linear-gradient(135deg, rgba(8, 20, 42, 0.92), rgba(10, 48, 68, 0.86) 48%, rgba(20, 130, 104, 0.78)),
+                oklch(18% 0.038 236);
             transition: opacity 700ms cubic-bezier(0.22, 1, 0.36, 1), visibility 700ms cubic-bezier(0.22, 1, 0.36, 1);
         }
         .has-js .intro-overlay {
@@ -58,11 +60,19 @@
             opacity: 0;
             pointer-events: none;
         }
+        .intro-stage {
+            width: min(520px, 58vw, calc(44vh * 16 / 9));
+            aspect-ratio: 16 / 9;
+            position: relative;
+            overflow: hidden;
+            border-radius: 22px;
+            background: oklch(98% 0.006 190);
+            border: 1px solid rgba(230, 247, 244, 0.34);
+            box-shadow: 0 26px 78px rgba(2, 10, 26, 0.38);
+        }
         .intro-video {
-            position: absolute;
-            inset: -2px;
-            width: calc(100vw + 4px);
-            height: calc(100vh + 4px);
+            width: 100%;
+            height: 100%;
             object-fit: cover;
             filter: saturate(0.98) contrast(1.03);
             background: oklch(98% 0.006 190);
@@ -150,14 +160,35 @@
                 display: none;
             }
         }
+        @media (max-width: 640px) {
+            .intro-overlay {
+                padding: 18px;
+            }
+            .intro-stage {
+                width: min(76vw, 320px, calc(30vh * 16 / 9));
+                border-radius: 16px;
+            }
+            .intro-skip {
+                width: 40px;
+                height: 40px;
+            }
+        }
+        @media (max-height: 560px) and (orientation: landscape) {
+            .intro-stage {
+                width: min(420px, 44vw, calc(40vh * 16 / 9));
+                border-radius: 16px;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="intro-overlay" data-intro-overlay>
-        <video class="intro-video" autoplay muted playsinline preload="auto" poster="{{ asset('images/presensync-video-poster.jpg') }}?v=clean-2" data-intro-video aria-hidden="true" disablepictureinpicture controlslist="nodownload nofullscreen noremoteplayback">
-            <source src="{{ asset('videos/presensync-intro.webm') }}?v=clean-2" type="video/webm">
-            <source src="{{ asset('videos/presensync-intro.mp4') }}?v=clean-2" type="video/mp4">
-        </video>
+        <div class="intro-stage">
+            <video class="intro-video" autoplay muted playsinline preload="auto" poster="{{ asset('images/presensync-video-poster.jpg') }}?v=clean-2" data-intro-video aria-hidden="true" disablepictureinpicture controlslist="nodownload nofullscreen noremoteplayback">
+                <source src="{{ asset('videos/presensync-intro.webm') }}?v=clean-2" type="video/webm">
+                <source src="{{ asset('videos/presensync-intro.mp4') }}?v=clean-2" type="video/mp4">
+            </video>
+        </div>
         <button class="intro-skip" type="button" data-intro-skip aria-label="Lewati intro">
             <i class="fa-solid fa-xmark" aria-hidden="true"></i>
         </button>
@@ -195,31 +226,13 @@
             const video = document.querySelector('[data-intro-video]');
             const skip = document.querySelector('[data-intro-skip]');
             const motionReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-            const forceIntro = new URL(window.location.href).searchParams.get('intro') === '1';
 
-            const introSeen = () => {
-                try {
-                    return window.sessionStorage?.getItem('presensyncIntroSeen') === '1';
-                } catch (error) {
-                    return false;
-                }
-            };
-
-            const markIntroSeen = () => {
-                try {
-                    window.sessionStorage?.setItem('presensyncIntroSeen', '1');
-                } catch (error) {
-                    return;
-                }
-            };
-
-            if (!overlay || !video || motionReduced || (!forceIntro && introSeen())) {
+            if (!overlay || !video || motionReduced) {
                 overlay?.classList.add('is-hidden');
                 return;
             }
 
             const finishIntro = () => {
-                markIntroSeen();
                 overlay.classList.add('is-hidden');
                 video.pause();
             };
@@ -227,6 +240,7 @@
             video.addEventListener('ended', finishIntro, { once: true });
             video.addEventListener('error', finishIntro, { once: true });
             skip?.addEventListener('click', finishIntro);
+            video.play?.().catch(() => {});
             window.setTimeout(finishIntro, 11000);
         })();
     </script>
