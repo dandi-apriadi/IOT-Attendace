@@ -45,8 +45,9 @@
             z-index: 50;
             align-items: center;
             justify-content: center;
-            padding: clamp(18px, 3vw, 44px);
-            background: oklch(17% 0.042 236);
+            padding: 0;
+            overflow: hidden;
+            background: oklch(98% 0.006 190);
             transition: opacity 700ms cubic-bezier(0.22, 1, 0.36, 1), visibility 700ms cubic-bezier(0.22, 1, 0.36, 1);
         }
         .has-js .intro-overlay {
@@ -58,11 +59,18 @@
             pointer-events: none;
         }
         .intro-video {
-            width: 100vw;
-            height: 100vh;
-            object-fit: contain;
+            position: absolute;
+            inset: -2px;
+            width: calc(100vw + 4px);
+            height: calc(100vh + 4px);
+            object-fit: cover;
             filter: saturate(0.98) contrast(1.03);
-            background: url('{{ asset("images/presensync-video-poster.jpg") }}') center / cover no-repeat;
+            background: oklch(98% 0.006 190);
+        }
+        .intro-video::-webkit-media-controls,
+        .intro-video::-webkit-media-controls-enclosure,
+        .intro-video::-webkit-media-controls-panel {
+            display: none !important;
         }
         .intro-skip {
             position: fixed;
@@ -74,10 +82,10 @@
             justify-content: center;
             width: 44px;
             height: 44px;
-            border: 1px solid rgba(230, 247, 244, 0.28);
+            border: 1px solid rgba(8, 20, 42, 0.16);
             border-radius: 999px;
-            background: rgba(245, 250, 249, 0.12);
-            color: oklch(96% 0.008 190);
+            background: rgba(8, 20, 42, 0.68);
+            color: oklch(98% 0.006 190);
             cursor: pointer;
             backdrop-filter: blur(16px);
         }
@@ -146,9 +154,9 @@
 </head>
 <body>
     <div class="intro-overlay" data-intro-overlay>
-        <video class="intro-video" autoplay muted playsinline preload="auto" poster="{{ asset('images/presensync-video-poster.jpg') }}" data-intro-video aria-hidden="true">
-            <source src="{{ asset('videos/presensync-intro.webm') }}" type="video/webm">
-            <source src="{{ asset('videos/presensync-intro.mp4') }}" type="video/mp4">
+        <video class="intro-video" autoplay muted playsinline preload="auto" poster="{{ asset('images/presensync-video-poster.jpg') }}?v=clean-2" data-intro-video aria-hidden="true" disablepictureinpicture controlslist="nodownload nofullscreen noremoteplayback">
+            <source src="{{ asset('videos/presensync-intro.webm') }}?v=clean-2" type="video/webm">
+            <source src="{{ asset('videos/presensync-intro.mp4') }}?v=clean-2" type="video/mp4">
         </video>
         <button class="intro-skip" type="button" data-intro-skip aria-label="Lewati intro">
             <i class="fa-solid fa-xmark" aria-hidden="true"></i>
@@ -178,7 +186,7 @@
             <button type="submit" class="btn-kinetic login-btn">MASUK SEKARANG</button>
         </form>
         
-        <p style="margin-top: 2rem; font-size: 0.8rem; opacity: 0.55;">PresenSync by Politeknik Negeri Manado</p>
+        <p style="margin-top: 2rem; font-size: 0.8rem; opacity: 0.5;">PresenSync by Politeknik Negeri Manado</p>
     </div>
 
     <script>
