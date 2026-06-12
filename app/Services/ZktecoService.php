@@ -320,28 +320,61 @@ class ZktecoService
     public function syncRegisteredStudentBiometricsFromUsers(array $users, ?callable $fingerprintResolver = null): array
     {
         $result = [
-            'scanned' => count($users),
-            'matched' => 0,
-            'updated' => 0,
-            'rfid_updated' => 0,
+            'scanned'             => count($users),
+            'matched'             => 0,
+            'updated'             => 0,
+            'rfid_updated'        => 0,
             'fingerprint_updated' => 0,
-            'unmatched' => 0,
-            'conflicts' => 0,
-            'errors' => [],
+            'unmatched'           => 0,
+            'conflicts'           => 0,
+            'errors'              => [],
         ];
 
+        if (empty($users)) {
+            return $result;
+        }
+
+        // Batch pre-load: kumpulkan semua userid/uid/cardno terlebih dahulu.
+        $allUserids = [];
+        $allUids    = [];
+        $allCardNos = [];
+
         foreach ($users as $user) {
-            $uid = (int) ($user['uid'] ?? 0);
+            $userid  = trim($this->clean((string) ($user['userid'] ?? '')));
+            $uid     = (int) ($user['uid'] ?? 0);
+            $cardno  = $this->normalizeCardNo($user['cardno'] ?? null);
+
+            if ($userid !== '') {
+                $allUserids[] = $userid;
+            }
+            if ($uid > 0) {
+                $allUids[] = $uid;
+            }
+            if ($cardno !== null) {
+                $allCardNos[] = $cardno;
+            }
+        }
+
+        $allUserids = array_values(array_unique($allUserids));
+        $allUids    = array_values(array_unique($allUids));
+        $allCardNos = array_values(array_unique($allCardNos));
+
+        // 3 query pengganti N query mahasiswa + N query conflict.
+        $byNim      = $allUserids ? Mahasiswa::whereIn('nim', $allUserids)->get()->keyBy('nim')  : collect();
+        $byId       = $allUids    ? Mahasiswa::whereIn('id', $allUids)->get()->keyBy('id')       : collect();
+        $cardOwners = $allCardNos ? Mahasiswa::whereIn('rfid_uid', $allCardNos)->get(['id', 'rfid_uid'])->keyBy('rfid_uid') : collect();
+
+        $fingerprintMarker = 'enrolled@' . ($this->device->device_id ?: $this->ip);
+
+        foreach ($users as $user) {
+            $uid    = (int) ($user['uid'] ?? 0);
             $userid = trim($this->clean((string) ($user['userid'] ?? '')));
             $cardno = $this->normalizeCardNo($user['cardno'] ?? null);
 
-            $mahasiswa = Mahasiswa::query()
-                ->when($userid !== '', fn ($query) => $query->where('nim', $userid))
-                ->when($userid === '' && $uid > 0, fn ($query) => $query->where('id', $uid))
-                ->first();
-
+            // Match mahasiswa: coba NIM dulu, fallback ke ID numerik.
+            $mahasiswa = $userid !== '' ? $byNim->get($userid) : null;
             if (! $mahasiswa && $uid > 0) {
-                $mahasiswa = Mahasiswa::find($uid);
+                $mahasiswa = $byId->get($uid);
             }
 
             if (! $mahasiswa) {
@@ -353,10 +386,8 @@ class ZktecoService
             $updates = [];
 
             if ($cardno !== null) {
-                $cardOwnerExists = Mahasiswa::query()
-                    ->where('rfid_uid', $cardno)
-                    ->whereKeyNot($mahasiswa->id)
-                    ->exists();
+                $cardOwner      = $cardOwners->get($cardno);
+                $cardOwnerExists = $cardOwner && $cardOwner->id !== $mahasiswa->id;
 
                 if ($cardOwnerExists) {
                     $result['conflicts']++;
@@ -370,7 +401,6 @@ class ZktecoService
             }
 
             $hasFingerprint = $fingerprintResolver ? (bool) $fingerprintResolver($uid) : false;
-            $fingerprintMarker = 'enrolled@' . ($this->device->device_id ?: $this->ip);
             if ($hasFingerprint && (string) $mahasiswa->fingerprint_data !== $fingerprintMarker) {
                 $updates['fingerprint_data'] = $fingerprintMarker;
                 $result['fingerprint_updated']++;
@@ -508,20 +538,87 @@ class ZktecoService
 
     /**
      * Memproses log absensi mentah yang sudah ditarik dari alat.
+     * Menggunakan batch pre-loading untuk menghindari N+1 query:
+     *   - 2 query untuk lookup mahasiswa (by rfid_uid + by nim)
+     *   - 1 query untuk pre-load semua jadwal relevan
+     *   - 1 query untuk batch-check absensi yang sudah ada
      *
      * @param array<int, array<string, mixed>> $attendances
      * @return array{inserted: int, skipped: int, total: int}
      */
     public function importAttendanceFromRecords(array $attendances): array
     {
-        $attendanceSessions = app(AttendanceSessionService::class);
+        if (empty($attendances)) {
+            return ['inserted' => 0, 'skipped' => 0, 'total' => 0];
+        }
 
+        $attendanceSessions = app(AttendanceSessionService::class);
         $inserted = 0;
         $skipped = 0;
         $affectedLiveCaches = [];
 
+        // Kumpulkan semua UID untuk batch lookup mahasiswa.
+        $allUids = array_values(array_filter(array_unique(
+            array_map(fn ($r) => $r['id'] ?? null, $attendances)
+        )));
+
+        // Batch load mahasiswas (2 query, bukan N query).
+        $byRfid = $allUids ? Mahasiswa::whereIn('rfid_uid', $allUids)->get()->keyBy('rfid_uid') : collect();
+        $byNim  = $allUids ? Mahasiswa::whereIn('nim', $allUids)->get()->keyBy('nim')           : collect();
+
+        // Kumpulkan nama hari dari semua timestamp untuk pre-load jadwal.
+        $dayNameSet = [];
         foreach ($attendances as $record) {
-            $uid = $record['id'] ?? null;
+            $ts = $record['timestamp'] ?? null;
+            if ($ts) {
+                foreach ($attendanceSessions->dayNames(Carbon::parse($ts)) as $dn) {
+                    $dayNameSet[$dn] = true;
+                }
+            }
+        }
+
+        // Pre-load semua jadwal yang mungkin relevan beserta semesternya (1 query).
+        $jadwals = $dayNameSet
+            ? Jadwal::query()->with('semesterAkademik')->whereIn('hari', array_keys($dayNameSet))->get()
+            : collect();
+
+        // Cache hasil matching jadwal per (kelas_id, date, time) agar tidak dihitung ulang.
+        $jadwalCache = [];
+
+        $findJadwal = function (int $kelasId, Carbon $time) use ($jadwals, &$jadwalCache, $attendanceSessions): ?Jadwal {
+            $date    = $time->toDateString();
+            $timeStr = $time->toTimeString();
+            $key     = "{$kelasId}|{$date}|{$timeStr}";
+
+            if (array_key_exists($key, $jadwalCache)) {
+                return $jadwalCache[$key];
+            }
+
+            $dayNames = $attendanceSessions->dayNames($time);
+
+            $match = $jadwals->first(function (Jadwal $j) use ($kelasId, $dayNames, $timeStr, $date) {
+                if ((int) $j->kelas_id !== $kelasId || ! in_array($j->hari, $dayNames, true)) {
+                    return false;
+                }
+                if ($timeStr < (string) $j->jam_mulai || $timeStr > (string) $j->jam_selesai) {
+                    return false;
+                }
+                $sem = $j->semesterAkademik;
+
+                return $sem
+                    && $date >= $sem->tanggal_mulai->toDateString()
+                    && $date <= $sem->tanggal_selesai->toDateString();
+            });
+
+            $jadwalCache[$key] = $match;
+
+            return $match;
+        };
+
+        // Pass 1: resolve mahasiswa + jadwal untuk tiap record, kumpulkan kandidat insert.
+        $candidates = [];
+        foreach ($attendances as $record) {
+            $uid       = $record['id'] ?? null;
             $timestamp = $record['timestamp'] ?? null;
 
             if (! $uid || ! $timestamp) {
@@ -529,46 +626,68 @@ class ZktecoService
                 continue;
             }
 
-            $time = Carbon::parse($timestamp);
-            $date = $time->toDateString();
-
-            $mahasiswa = Mahasiswa::where('rfid_uid', $uid)
-                ->orWhere('nim', $uid)
-                ->first();
+            $time      = Carbon::parse($timestamp);
+            $mahasiswa = $byRfid->get($uid) ?? $byNim->get($uid);
 
             if (! $mahasiswa) {
                 $skipped++;
                 continue;
             }
 
-            $scheduleMatch = $attendanceSessions->resolveTapSchedule($mahasiswa, $time, false);
-            $jadwal = $scheduleMatch['jadwal'] ?? null;
-            $baselineTime = $scheduleMatch['baseline_time'] ?? null;
+            $jadwal = $findJadwal((int) $mahasiswa->kelas_id, $time);
 
             if (! $jadwal) {
                 $skipped++;
                 continue;
             }
 
-            $exists = Absensi::where('mahasiswa_id', $mahasiswa->id)
-                ->where('tanggal', $date)
-                ->where('jadwal_id', $jadwal->id)
-                ->exists();
+            $candidates[] = [
+                'mahasiswa' => $mahasiswa,
+                'jadwal'    => $jadwal,
+                'time'      => $time,
+                'date'      => $time->toDateString(),
+                'status'    => $attendanceSessions->statusForTap($time->toTimeString(), $jadwal->jam_mulai),
+            ];
+        }
 
-            if ($exists) {
+        // Batch check absensi yang sudah ada (1 query, bukan N query).
+        $existingKeySet = [];
+        if (! empty($candidates)) {
+            $mIds  = array_unique(array_map(fn ($c) => $c['mahasiswa']->id, $candidates));
+            $jIds  = array_unique(array_map(fn ($c) => $c['jadwal']->id,    $candidates));
+            $dates = array_unique(array_map(fn ($c) => $c['date'],          $candidates));
+
+            Absensi::query()
+                ->whereIn('mahasiswa_id', $mIds)
+                ->whereIn('jadwal_id',    $jIds)
+                ->whereIn('tanggal',      $dates)
+                ->get(['mahasiswa_id', 'tanggal', 'jadwal_id'])
+                ->each(function ($a) use (&$existingKeySet): void {
+                    $existingKeySet["{$a->mahasiswa_id}|{$a->tanggal}|{$a->jadwal_id}"] = true;
+                });
+        }
+
+        // Pass 2: insert record baru saja.
+        $insertedInBatch = [];
+        foreach ($candidates as $c) {
+            $key = "{$c['mahasiswa']->id}|{$c['date']}|{$c['jadwal']->id}";
+
+            if (isset($existingKeySet[$key]) || isset($insertedInBatch[$key])) {
                 $skipped++;
                 continue;
             }
 
             Absensi::create([
-                'mahasiswa_id' => $mahasiswa->id,
-                'jadwal_id' => $jadwal->id,
-                'tanggal' => $date,
-                'waktu_tap' => $time->toTimeString(),
+                'mahasiswa_id'   => $c['mahasiswa']->id,
+                'jadwal_id'      => $c['jadwal']->id,
+                'tanggal'        => $c['date'],
+                'waktu_tap'      => $c['time']->toTimeString(),
                 'metode_absensi' => 'Fingerprint',
-                'status' => $attendanceSessions->statusForTap($time->toTimeString(), $baselineTime),
+                'status'         => $c['status'],
             ]);
-            $affectedLiveCaches[$date . '|' . $jadwal->id] = [$date, (int) $jadwal->id];
+
+            $insertedInBatch[$key] = true;
+            $affectedLiveCaches[$c['date'] . '|' . $c['jadwal']->id] = [$c['date'], (int) $c['jadwal']->id];
             $inserted++;
         }
 
@@ -582,8 +701,8 @@ class ZktecoService
 
         return [
             'inserted' => $inserted,
-            'skipped' => $skipped,
-            'total' => count($attendances),
+            'skipped'  => $skipped,
+            'total'    => count($attendances),
         ];
     }
 

@@ -79,12 +79,11 @@ class DosenSessionController extends Controller
                 ->whereIn('hari', $dayNames)
                 ->where('jam_mulai', '<=', $currentTime)
                 ->where('jam_selesai', '>=', $currentTime)
-                ->when($user?->role !== 'admin', function ($builder) use ($user): void {
-                    $courseIds = $this->assignedCourseIds((int) ($user?->id ?? 0));
-                    if ($courseIds === []) {
+                ->when($user?->role !== 'admin', function ($builder) use ($assignedCourseIds): void {
+                    if ($assignedCourseIds === []) {
                         $builder->whereRaw('1 = 0');
                     } else {
-                        $builder->whereIn('mata_kuliah_id', $courseIds);
+                        $builder->whereIn('mata_kuliah_id', $assignedCourseIds);
                     }
                 })
                 ->orderBy('jam_mulai')
@@ -105,12 +104,11 @@ class DosenSessionController extends Controller
         }
 
         $query = Jadwal::with(['semesterAkademik', 'kelas', 'mata_kuliah'])
-            ->when($user?->role !== 'admin', function ($builder) use ($user): void {
-                $courseIds = $this->assignedCourseIds((int) ($user?->id ?? 0));
-                if ($courseIds === []) {
+            ->when($user?->role !== 'admin', function ($builder) use ($assignedCourseIds): void {
+                if ($assignedCourseIds === []) {
                     $builder->whereRaw('1 = 0');
                 } else {
-                    $builder->whereIn('mata_kuliah_id', $courseIds);
+                    $builder->whereIn('mata_kuliah_id', $assignedCourseIds);
                 }
             })
             ->orderByDesc('semester_akademik_id')

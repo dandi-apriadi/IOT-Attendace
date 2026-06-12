@@ -210,9 +210,9 @@ class MonitoringLiveController extends Controller
                 ->limit(30)
                 ->get();
 
-            $todayTotal = Absensi::query()
-                ->whereDate('tanggal', $selectedDate)
-                ->count();
+            // attendancePerSession sudah aggregasi semua absensi hari ini per jadwal;
+            // sum-nya setara dengan COUNT(*) WHERE tanggal = $selectedDate.
+            $todayTotal = $attendancePerSession->sum();
 
             $thisHourTotal = 0;
             if ($selectedDateCarbon->isSameDay($now)) {
