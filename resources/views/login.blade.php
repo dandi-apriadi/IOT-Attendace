@@ -10,6 +10,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="{{ asset('css/premium-design.css') }}">
+    <script>
+        document.documentElement.classList.add('has-js');
+    </script>
     <style>
         body {
             display: flex;
@@ -19,7 +22,7 @@
             position: relative;
             isolation: isolate;
             overflow-x: hidden;
-            background: oklch(19% 0.045 241);
+            background: oklch(18% 0.038 236);
             padding: 20px;
             font-family: 'Inter', sans-serif;
         }
@@ -30,39 +33,76 @@
             z-index: -1;
             pointer-events: none;
             background:
-                radial-gradient(circle at 30% 22%, rgba(28, 173, 137, 0.38), transparent 34%),
-                linear-gradient(135deg, rgba(8, 20, 42, 0.82), rgba(10, 40, 65, 0.66) 52%, rgba(21, 125, 104, 0.54));
+                linear-gradient(135deg, rgba(8, 20, 42, 0.96), rgba(10, 48, 68, 0.88) 44%, rgba(20, 130, 104, 0.72)),
+                linear-gradient(90deg, rgba(245, 250, 249, 0.08) 1px, transparent 1px),
+                linear-gradient(0deg, rgba(245, 250, 249, 0.06) 1px, transparent 1px);
+            background-size: auto, 72px 72px, 72px 72px;
         }
-        .login-video-bg {
+        .intro-overlay {
+            display: none;
             position: fixed;
             inset: 0;
-            z-index: -2;
+            z-index: 50;
+            align-items: center;
+            justify-content: center;
+            padding: clamp(18px, 3vw, 44px);
+            background: oklch(17% 0.042 236);
+            transition: opacity 700ms cubic-bezier(0.22, 1, 0.36, 1), visibility 700ms cubic-bezier(0.22, 1, 0.36, 1);
+        }
+        .has-js .intro-overlay {
+            display: flex;
+        }
+        .intro-overlay.is-hidden {
+            visibility: hidden;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .intro-video {
             width: 100vw;
             height: 100vh;
-            object-fit: cover;
-            pointer-events: none;
-            filter: saturate(0.94) contrast(1.05);
+            object-fit: contain;
+            filter: saturate(0.98) contrast(1.03);
             background: url('{{ asset("images/presensync-video-poster.jpg") }}') center / cover no-repeat;
+        }
+        .intro-skip {
+            position: fixed;
+            top: clamp(16px, 3vw, 28px);
+            right: clamp(16px, 3vw, 28px);
+            z-index: 51;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 44px;
+            height: 44px;
+            border: 1px solid rgba(230, 247, 244, 0.28);
+            border-radius: 999px;
+            background: rgba(245, 250, 249, 0.12);
+            color: oklch(96% 0.008 190);
+            cursor: pointer;
+            backdrop-filter: blur(16px);
+        }
+        .intro-skip:focus-visible {
+            outline: 3px solid rgba(18, 155, 120, 0.56);
+            outline-offset: 3px;
         }
         .login-card {
             max-width: 440px;
             width: 100%;
             position: relative;
-            background: rgba(245, 250, 249, 0.08);
-            backdrop-filter: blur(40px);
-            border: 1px solid rgba(230, 247, 244, 0.18);
+            background: oklch(97% 0.008 190);
+            border: 1px solid rgba(230, 247, 244, 0.58);
             border-radius: var(--radius-xl);
             padding: 3rem;
-            color: oklch(97% 0.006 190);
+            color: var(--text-primary);
             text-align: center;
-            box-shadow: 0 28px 90px rgba(2, 10, 26, 0.38);
+            box-shadow: 0 30px 90px rgba(2, 10, 26, 0.28);
         }
         .login-logo {
             width: min(260px, 82%);
             height: auto;
             margin: 0 auto 1.25rem;
             display: block;
-            filter: drop-shadow(0 16px 34px rgba(0, 8, 24, 0.42));
+            filter: drop-shadow(0 14px 28px rgba(0, 8, 24, 0.16));
         }
         .form-group {
             text-align: left;
@@ -74,20 +114,19 @@
             text-transform: uppercase;
             letter-spacing: 0.1em;
             margin-bottom: 0.5rem;
-            color: rgba(245, 250, 249, 0.82);
-            text-shadow: 0 1px 12px rgba(0, 8, 24, 0.34);
+            color: var(--text-muted);
         }
         .form-control {
             width: 100%;
-            background: rgba(245, 250, 249, 0.2);
-            border: none;
+            background: oklch(93% 0.01 235);
+            border: 1px solid oklch(84% 0.014 225);
             padding: 1rem;
             border-radius: var(--radius-md);
-            color: oklch(97% 0.006 190);
+            color: var(--text-primary);
             font-family: inherit;
         }
         .form-control::placeholder {
-            color: rgba(245, 250, 249, 0.54);
+            color: oklch(64% 0.012 230);
         }
         .form-control:focus {
             outline: 2px solid var(--kinetic-yellow);
@@ -99,23 +138,29 @@
             margin-top: 1rem;
         }
         @media (prefers-reduced-motion: reduce) {
-            .login-video-bg {
+            .intro-overlay {
                 display: none;
             }
         }
     </style>
 </head>
 <body>
-    <video class="login-video-bg" autoplay muted loop playsinline preload="metadata" poster="{{ asset('images/presensync-video-poster.jpg') }}" aria-hidden="true">
-        <source src="{{ asset('videos/presensync-intro.webm') }}" type="video/webm">
-        <source src="{{ asset('videos/presensync-intro.mp4') }}" type="video/mp4">
-    </video>
+    <div class="intro-overlay" data-intro-overlay>
+        <video class="intro-video" autoplay muted playsinline preload="auto" poster="{{ asset('images/presensync-video-poster.jpg') }}" data-intro-video aria-hidden="true">
+            <source src="{{ asset('videos/presensync-intro.webm') }}" type="video/webm">
+            <source src="{{ asset('videos/presensync-intro.mp4') }}" type="video/mp4">
+        </video>
+        <button class="intro-skip" type="button" data-intro-skip aria-label="Lewati intro">
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+    </div>
+
     <div class="login-card">
         <img class="login-logo" src="{{ asset('images/presensync-logo-web.png') }}" alt="PresenSync">
         <p style="opacity: 0.72; margin-bottom: 3rem;">Smart Attendance Sync Platform</p>
         
         @if ($errors->any())
-            <div style="background: rgba(186, 26, 26, 0.2); border: 1px solid rgba(186, 26, 26, 0.5); padding: 0.75rem; border-radius: 10px; margin-bottom: 1rem; text-align: left; font-size: 0.9rem;">
+            <div style="background: rgba(186, 26, 26, 0.12); border: 1px solid rgba(186, 26, 26, 0.36); color: #BA1A1A; padding: 0.75rem; border-radius: 10px; margin-bottom: 1rem; text-align: left; font-size: 0.9rem;">
                 {{ $errors->first() }}
             </div>
         @endif
@@ -133,7 +178,49 @@
             <button type="submit" class="btn-kinetic login-btn">MASUK SEKARANG</button>
         </form>
         
-        <p style="margin-top: 2rem; font-size: 0.8rem; opacity: 0.5;">PresenSync by Politeknik Negeri Manado</p>
+        <p style="margin-top: 2rem; font-size: 0.8rem; opacity: 0.55;">PresenSync by Politeknik Negeri Manado</p>
     </div>
+
+    <script>
+        (() => {
+            const overlay = document.querySelector('[data-intro-overlay]');
+            const video = document.querySelector('[data-intro-video]');
+            const skip = document.querySelector('[data-intro-skip]');
+            const motionReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            const forceIntro = new URL(window.location.href).searchParams.get('intro') === '1';
+
+            const introSeen = () => {
+                try {
+                    return window.sessionStorage?.getItem('presensyncIntroSeen') === '1';
+                } catch (error) {
+                    return false;
+                }
+            };
+
+            const markIntroSeen = () => {
+                try {
+                    window.sessionStorage?.setItem('presensyncIntroSeen', '1');
+                } catch (error) {
+                    return;
+                }
+            };
+
+            if (!overlay || !video || motionReduced || (!forceIntro && introSeen())) {
+                overlay?.classList.add('is-hidden');
+                return;
+            }
+
+            const finishIntro = () => {
+                markIntroSeen();
+                overlay.classList.add('is-hidden');
+                video.pause();
+            };
+
+            video.addEventListener('ended', finishIntro, { once: true });
+            video.addEventListener('error', finishIntro, { once: true });
+            skip?.addEventListener('click', finishIntro);
+            window.setTimeout(finishIntro, 11000);
+        })();
+    </script>
 </body>
 </html>
