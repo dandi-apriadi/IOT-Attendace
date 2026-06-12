@@ -385,34 +385,25 @@ class MahasiswaController extends Controller
 
     private function validatePayload(Request $request, ?int $mahasiswaId = null): array
     {
-        return $request->validate([
-            'nim' => [
-                'required',
-                'string',
-                'max:30',
-                Rule::unique('mahasiswa', 'nim')->ignore($mahasiswaId),
-            ],
+        $rules = [
             'nama' => ['required', 'string', 'max:255'],
             'kelas_id' => ['required', 'exists:kelas,id'],
             'status_akademik' => ['required', Rule::in(array_keys($this->statusAkademikOptions()))],
             'semester_level' => ['nullable', 'integer', 'min:1', 'max:14'],
             'promotion_paused' => ['nullable', 'boolean'],
             'promotion_note' => ['nullable', 'string', 'max:255'],
-            'rfid_uid' => [
-                'nullable',
+        ];
+
+        if ($mahasiswaId === null) {
+            $rules['nim'] = [
+                'required',
                 'string',
-                'max:255',
-                Rule::unique('mahasiswa', 'rfid_uid')->ignore($mahasiswaId),
-            ],
-            'fingerprint_data' => ['nullable', 'string'],
-            'face_model_data' => ['nullable', 'string'],
-            'barcode_id' => [
-                'nullable',
-                'string',
-                'max:255',
-                Rule::unique('mahasiswa', 'barcode_id')->ignore($mahasiswaId),
-            ],
-        ]);
+                'max:30',
+                Rule::unique('mahasiswa', 'nim'),
+            ];
+        }
+
+        $data = $request->validate($rules);
 
         $data['promotion_paused'] = $request->boolean('promotion_paused');
         if (! $data['promotion_paused']) {

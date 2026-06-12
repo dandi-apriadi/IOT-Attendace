@@ -77,9 +77,7 @@ class DeviceController extends Controller
         $device = Device::findOrFail($id);
 
         $data = $request->validate([
-            'device_id' => ['required', 'string', 'max:50', Rule::unique('devices')->ignore($device->id)],
             'name' => ['nullable', 'string', 'max:255'],
-            'type' => ['required', Rule::in(['custom_iot', 'zkteco'])],
             'ip_address' => ['nullable', 'string', 'max:45'],
             'port' => ['nullable', 'integer', 'min:1', 'max:65535'],
             'token_hash' => ['nullable', 'string', 'max:255'],
@@ -89,7 +87,7 @@ class DeviceController extends Controller
         $data['is_active'] = ! empty($data['is_active']);
         [$data['token_hash']] = $this->normalizeDeviceTokenHash($data['token_hash'] ?? null, $device->token_hash);
 
-        if ($data['type'] === 'zkteco' && empty($data['port'])) {
+        if ($device->type === 'zkteco' && empty($data['port'])) {
             $data['port'] = 4370;
         }
 

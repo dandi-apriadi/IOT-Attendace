@@ -97,8 +97,6 @@
             @endforeach
         </select>
         <input name="semester_level" type="number" min="1" max="14" value="{{ old('semester_level') }}" placeholder="Semester (opsional)" style="padding: 0.75rem; border: none; background: #F1F3F5; border-radius: 8px;">
-        <input name="rfid_uid" type="text" value="{{ old('rfid_uid') }}" placeholder="RFID UID (opsional)" style="padding: 0.75rem; border: none; background: #F1F3F5; border-radius: 8px;">
-        <input name="barcode_id" type="text" value="{{ old('barcode_id') }}" placeholder="Barcode ID (opsional)" style="padding: 0.75rem; border: none; background: #F1F3F5; border-radius: 8px;">
         <button class="btn-kinetic" type="submit"><i class="fas fa-plus"></i> Tambah Mahasiswa</button>
     </form>
 

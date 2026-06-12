@@ -29,8 +29,8 @@
         
         <div style="margin-bottom: 1rem;">
             <label class="form-label">Device ID</label>
-            <input type="text" name="device_id" class="form-control" value="{{ old('device_id', $device->device_id) }}" required>
-            <small style="color: #6b7280; font-size: 0.75rem;">ID unik yang dikirimkan oleh perangkat keras.</small>
+            <input type="text" class="form-control" value="{{ $device->device_id }}" disabled>
+            <small style="color: #6b7280; font-size: 0.75rem;">ID unik perangkat dikunci setelah perangkat dibuat.</small>
         </div>
 
         <div style="margin-bottom: 1rem;">
@@ -41,11 +41,8 @@
 
         <div style="margin-bottom: 1rem;">
             <label class="form-label">Tipe Perangkat</label>
-            <select name="type" class="form-control" required>
-                <option value="custom_iot" {{ old('type', $device->type) === 'custom_iot' ? 'selected' : '' }}>Custom IoT (HTTP)</option>
-                <option value="zkteco" {{ old('type', $device->type) === 'zkteco' ? 'selected' : '' }}>ZKTeco (mis. Solution X609)</option>
-            </select>
-            <small style="color: #6b7280; font-size: 0.75rem;">ZKTeco terhubung langsung via IP/port (UDP). Custom IoT memakai HTTP + token.</small>
+            <input type="text" class="form-control" value="{{ $device->type === 'zkteco' ? 'ZKTeco (mis. Solution X609)' : 'Custom IoT (HTTP)' }}" disabled>
+            <small style="color: #6b7280; font-size: 0.75rem;">Tipe perangkat dikunci agar alur autentikasi tidak berubah tanpa registrasi ulang.</small>
         </div>
 
         <div style="margin-bottom: 1rem;">
@@ -62,8 +59,8 @@
 
         <div style="margin-bottom: 1.5rem;">
             <label class="form-label">Token Custom IoT</label>
-            <input type="text" name="token_hash" class="form-control" value="{{ old('token_hash', $device->token_hash) }}">
-            <small style="color: #6b7280; font-size: 0.75rem;">Boleh isi token asli firmware atau hash SHA-256. Kosongkan untuk memakai token lama.</small>
+            <input type="text" name="token_hash" class="form-control" value="{{ old('token_hash') }}" autocomplete="off" placeholder="Kosongkan jika tidak ingin mengganti token">
+            <small style="color: #6b7280; font-size: 0.75rem;">Token lama tidak ditampilkan. Isi hanya jika ingin rotasi token Custom IoT.</small>
         </div>
 
         <div style="margin-bottom: 2rem;">

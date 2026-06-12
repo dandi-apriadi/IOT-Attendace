@@ -369,6 +369,100 @@ class WebRoutesTest extends TestCase
             ->assertSee('/master/devices/1/pull-biometrics', false);
     }
 
+    public function test_update_device_tidak_bisa_mengubah_identitas_alat(): void
+    {
+        $device = Device::create([
+            'device_id' => 'ZK_X609_1',
+            'name' => 'ZKTeco X609 #1',
+            'type' => 'zkteco',
+            'ip_address' => '192.168.0.10',
+            'port' => 4370,
+            'token_hash' => hash('sha256', 'test-token'),
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($this->admin);
+        $response = $this->put("/master/devices/{$device->id}", [
+            'device_id' => 'CUSTOM-01',
+            'name' => 'Ruang Lab Baru',
+            'type' => 'custom_iot',
+            'ip_address' => '192.168.0.20',
+            'port' => 1234,
+            'token_hash' => '',
+            'is_active' => '1',
+        ]);
+
+        $response->assertRedirect('/master/devices');
+        $device->refresh();
+
+        $this->assertSame('ZK_X609_1', $device->device_id);
+        $this->assertSame('zkteco', $device->type);
+        $this->assertSame('Ruang Lab Baru', $device->name);
+        $this->assertSame('192.168.0.20', $device->ip_address);
+        $this->assertSame(1234, $device->port);
+    }
+
+    public function test_update_mahasiswa_tidak_bisa_mengubah_identitas_dan_biometrik_manual(): void
+    {
+        $this->actingAs($this->admin);
+
+        $response = $this->put("/master/mahasiswa/{$this->mahasiswa->id}", [
+            'nim' => '20999999',
+            'nama' => 'Budi Update',
+            'kelas_id' => $this->mahasiswa->kelas_id,
+            'status_akademik' => 'nonaktif',
+            'semester_level' => 4,
+            'promotion_paused' => '1',
+            'promotion_note' => 'Verifikasi admin',
+            'rfid_uid' => 'RFID-EDITED',
+            'barcode_id' => 'BARCODE-EDITED',
+            'fingerprint_data' => 'FINGER-EDITED',
+            'face_model_data' => 'FACE-EDITED',
+        ]);
+
+        $response->assertRedirect('/master/mahasiswa');
+        $this->mahasiswa->refresh();
+
+        $this->assertSame('20220001', $this->mahasiswa->nim);
+        $this->assertSame('RFID123456', $this->mahasiswa->rfid_uid);
+        $this->assertSame('BARCODE123456', $this->mahasiswa->barcode_id);
+        $this->assertSame('FINGER123456', $this->mahasiswa->fingerprint_data);
+        $this->assertSame('FACE123456', $this->mahasiswa->face_model_data);
+        $this->assertSame('Budi Update', $this->mahasiswa->nama);
+        $this->assertSame('nonaktif', $this->mahasiswa->status_akademik);
+        $this->assertTrue($this->mahasiswa->promotion_paused);
+        $this->assertSame('Verifikasi admin', $this->mahasiswa->promotion_note);
+    }
+
+    public function test_tambah_mahasiswa_mengabaikan_biometrik_manual(): void
+    {
+        $kelas = Kelas::firstOrFail();
+
+        $this->actingAs($this->admin);
+        $response = $this->post('/master/mahasiswa', [
+            'nim' => '20229999',
+            'nama' => 'Mahasiswa Dari Form',
+            'kelas_id' => $kelas->id,
+            'status_akademik' => 'aktif',
+            'semester_level' => 1,
+            'rfid_uid' => 'RFID-FORM',
+            'barcode_id' => 'BARCODE-FORM',
+            'fingerprint_data' => 'FINGER-FORM',
+            'face_model_data' => 'FACE-FORM',
+        ]);
+
+        $response->assertRedirect('/master/mahasiswa');
+
+        $this->assertDatabaseHas('mahasiswa', [
+            'nim' => '20229999',
+            'nama' => 'Mahasiswa Dari Form',
+            'rfid_uid' => null,
+            'barcode_id' => null,
+            'fingerprint_data' => null,
+            'face_model_data' => null,
+        ]);
+    }
+
     /**
      * Test master data mata kuliah route
      */
