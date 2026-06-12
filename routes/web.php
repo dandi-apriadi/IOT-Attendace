@@ -126,6 +126,7 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     // Operasi ZKTeco (X609) — komunikasi dua arah ke alat
     Route::post('/master/devices/{device}/test', [\App\Http\Controllers\DeviceController::class, 'testConnection'])->name('devices.test');
     Route::get('/master/devices/{device}/info', [\App\Http\Controllers\DeviceController::class, 'info'])->name('devices.info');
+    Route::get('/master/devices/{device}/commands/{command}/status', [\App\Http\Controllers\DeviceController::class, 'commandStatus'])->name('devices.commands.status');
     Route::post('/master/devices/{device}/sync-users', [\App\Http\Controllers\DeviceController::class, 'syncUsers'])->name('devices.sync-users');
     Route::get('/master/devices/{device}/users', [\App\Http\Controllers\DeviceController::class, 'users'])->name('devices.users');
     Route::post('/master/devices/{device}/import-users', [\App\Http\Controllers\DeviceController::class, 'importUsers'])->name('devices.import-users');

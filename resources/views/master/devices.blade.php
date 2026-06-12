@@ -81,24 +81,24 @@
                             <div style="display:flex; gap:0.4rem; flex-wrap:wrap;">
                                 <button type="button" onclick="zkTest({{ $device->id }})" class="zk-btn" style="background:#eef2ff; color:#4338ca;"><i class="fas fa-plug"></i> Test</button>
                                 <button type="button" onclick="zkInfo({{ $device->id }})" class="zk-btn" style="background:#eef2ff; color:#4338ca;"><i class="fas fa-circle-info"></i> Info</button>
-                                <form action="{{ route('devices.sync-users', $device->id) }}" method="POST" onsubmit="return confirm('Kirim SEMUA mahasiswa ke perangkat ini?');" style="margin:0;">
+                                <form action="{{ route('devices.sync-users', $device->id) }}" method="POST" onsubmit="return confirm('Kirim SEMUA mahasiswa ke perangkat ini?');" style="margin:0;" @if (config('agent.role') === 'server') data-zk-async="{{ $device->id }}" @endif>
                                     @csrf
                                     <button type="submit" class="zk-btn" style="background:#ecfdf5; color:#047857;"><i class="fas fa-upload"></i> Sync Users</button>
                                 </form>
-                                <form action="{{ route('devices.pull-attendance', $device->id) }}" method="POST" style="margin:0;">
+                                <form action="{{ route('devices.pull-attendance', $device->id) }}" method="POST" style="margin:0;" @if (config('agent.role') === 'server') data-zk-async="{{ $device->id }}" @endif>
                                     @csrf
                                     <button type="submit" class="zk-btn" style="background:#ecfdf5; color:#047857;"><i class="fas fa-download"></i> Pull Absensi</button>
                                 </form>
-                                <form action="{{ route('devices.pull-biometrics', $device->id) }}" method="POST" onsubmit="return confirm('Tarik data kartu dan sidik jari dari alat untuk mahasiswa yang sudah terdaftar di sistem?');" style="margin:0;">
+                                <form action="{{ route('devices.pull-biometrics', $device->id) }}" method="POST" onsubmit="return confirm('Tarik data kartu dan sidik jari dari alat untuk mahasiswa yang sudah terdaftar di sistem?');" style="margin:0;" @if (config('agent.role') === 'server') data-zk-async="{{ $device->id }}" @endif>
                                     @csrf
                                     <button type="submit" class="zk-btn" style="background:#e0f2fe; color:#0369a1;"><i class="fas fa-fingerprint"></i> Pull Biometrik</button>
                                 </form>
                                 <a href="{{ route('devices.users', $device->id) }}" class="zk-btn" style="background:#f1f5f9; color:#334155; text-decoration:none;"><i class="fas fa-users"></i> Lihat Users</a>
-                                <form action="{{ route('devices.sync-time', $device->id) }}" method="POST" onsubmit="return confirm('Sinkronkan waktu perangkat dengan server?');" style="margin:0;">
+                                <form action="{{ route('devices.sync-time', $device->id) }}" method="POST" onsubmit="return confirm('Sinkronkan waktu perangkat dengan server?');" style="margin:0;" @if (config('agent.role') === 'server') data-zk-async="{{ $device->id }}" @endif>
                                     @csrf
                                     <button type="submit" class="zk-btn" style="background:#f1f5f9; color:#334155;"><i class="fas fa-clock"></i> Sync Waktu</button>
                                 </form>
-                                <form action="{{ route('devices.clear-attendance', $device->id) }}" method="POST" onsubmit="return confirm('PERINGATAN: Kosongkan SEMUA log absensi di perangkat? Pastikan sudah ditarik ke server.');" style="margin:0;">
+                                <form action="{{ route('devices.clear-attendance', $device->id) }}" method="POST" onsubmit="return confirm('PERINGATAN: Kosongkan SEMUA log absensi di perangkat? Pastikan sudah ditarik ke server.');" style="margin:0;" @if (config('agent.role') === 'server') data-zk-async="{{ $device->id }}" @endif>
                                     @csrf
                                     <button type="submit" class="zk-btn" style="background:#fef2f2; color:#b91c1c;"><i class="fas fa-eraser"></i> Clear Log</button>
                                 </form>
@@ -151,6 +151,8 @@
 @push('scripts')
 <script>
     const ZK_CSRF = '{{ csrf_token() }}';
+    const ZK_POLL_INTERVAL_MS = 1500;
+    const ZK_POLL_MAX_ATTEMPTS = 80;
 
     function zkShow(id, text, isError) {
         const box = document.getElementById('zk-result-' + id);
@@ -160,29 +162,103 @@
         box.textContent = text;
     }
 
-    async function zkTest(id) {
-        zkShow(id, 'Menghubungkan ke perangkat...', false);
+    function zkResultLines(data) {
+        const result = data.result || {};
+        if (data.type === 'get_info' && result && Object.keys(result).length) {
+            return [
+                'Versi      : ' + (result.version || '-'),
+                'Serial     : ' + (result.serial_number || '-'),
+                'Nama Alat  : ' + (result.device_name || '-'),
+                'Platform   : ' + (result.platform || '-'),
+                'Waktu Alat : ' + (result.device_time || '-'),
+            ].join('\n');
+        }
+
+        if (!result || !Object.keys(result).length) {
+            return '';
+        }
+
+        return JSON.stringify(result, null, 2);
+    }
+
+    function zkStatusText(data) {
+        const icon = data.failed ? '❌ ' : (data.done ? '✅ ' : '⏳ ');
+        const lines = [icon + (data.message || 'Menunggu hasil agent...')];
+        const resultText = zkResultLines(data);
+
+        if (resultText) {
+            lines.push('', resultText);
+        }
+
+        return lines.join('\n');
+    }
+
+    async function zkReadJson(res) {
+        const text = await res.text();
         try {
-            const res = await fetch('/master/devices/' + id + '/test', {
-                method: 'POST',
-                headers: { 'X-CSRF-TOKEN': ZK_CSRF, 'Accept': 'application/json' },
-            });
-            const data = await res.json();
-            zkShow(id, (data.ok ? '✅ ' : '❌ ') + (data.message || ''), !data.ok);
+            return text ? JSON.parse(text) : {};
+        } catch (e) {
+            throw new Error('Respons server bukan JSON: ' + text.slice(0, 120));
+        }
+    }
+
+    async function zkPollCommand(id, statusUrl) {
+        for (let attempt = 0; attempt < ZK_POLL_MAX_ATTEMPTS; attempt++) {
+            const res = await fetch(statusUrl, { headers: { 'Accept': 'application/json' } });
+            const data = await zkReadJson(res);
+
+            zkShow(id, zkStatusText(data), data.failed || !data.ok);
+
+            if (data.done || data.failed) {
+                return data;
+            }
+
+            await new Promise(resolve => setTimeout(resolve, ZK_POLL_INTERVAL_MS));
+        }
+
+        zkShow(id, '⏳ Agent belum mengirim hasil. Perintah masih bisa selesai otomatis; cek lagi beberapa saat.', true);
+        return null;
+    }
+
+    async function zkQueueRequest(id, url, options = {}) {
+        const res = await fetch(url, {
+            ...options,
+            headers: {
+                'X-CSRF-TOKEN': ZK_CSRF,
+                'Accept': 'application/json',
+                ...(options.headers || {}),
+            },
+        });
+        const data = await zkReadJson(res);
+
+        if (!res.ok || !data.ok) {
+            zkShow(id, '❌ ' + (data.message || data.error || 'Request gagal.'), true);
+            return data;
+        }
+
+        zkShow(id, '⏳ ' + (data.message || 'Perintah dikirim ke agent lokal.'), false);
+        if (data.status_url) {
+            return zkPollCommand(id, data.status_url);
+        }
+
+        zkShow(id, (data.ok ? '✅ ' : '❌ ') + (data.message || ''), !data.ok);
+        return data;
+    }
+
+    async function zkTest(id) {
+        zkShow(id, 'Mengirim perintah cek koneksi ke agent...', false);
+        try {
+            await zkQueueRequest(id, '/master/devices/' + id + '/test', { method: 'POST' });
         } catch (e) {
             zkShow(id, '❌ Gagal: ' + e.message, true);
         }
     }
 
     async function zkInfo(id) {
-        zkShow(id, 'Mengambil info perangkat...', false);
+        zkShow(id, 'Mengirim perintah ambil info ke agent...', false);
         try {
-            const res = await fetch('/master/devices/' + id + '/info', {
-                method: 'GET',
-                headers: { 'Accept': 'application/json' },
-            });
-            const data = await res.json();
-            if (data.ok && data.info) {
+            const data = await zkQueueRequest(id, '/master/devices/' + id + '/info', { method: 'GET' });
+            if (data && data.info && !data.status_url) {
                 const i = data.info;
                 zkShow(id,
                     'Versi      : ' + (i.version || '-') + '\n' +
@@ -190,13 +266,30 @@
                     'Nama Alat  : ' + (i.device_name || '-') + '\n' +
                     'Platform   : ' + (i.platform || '-') + '\n' +
                     'Waktu Alat : ' + (i.device_time || '-'), false);
-            } else {
-                zkShow(id, '❌ ' + (data.message || 'Gagal mengambil info.'), true);
             }
         } catch (e) {
             zkShow(id, '❌ Gagal: ' + e.message, true);
         }
     }
+
+    document.querySelectorAll('form[data-zk-async]').forEach((form) => {
+        form.addEventListener('submit', async (event) => {
+            if (event.defaultPrevented) return;
+
+            event.preventDefault();
+            const id = form.getAttribute('data-zk-async');
+            const button = form.querySelector('button[type="submit"]');
+
+            if (button) button.disabled = true;
+            try {
+                await zkQueueRequest(id, form.action, { method: form.method || 'POST' });
+            } catch (e) {
+                zkShow(id, '❌ Gagal: ' + e.message, true);
+            } finally {
+                if (button) button.disabled = false;
+            }
+        });
+    });
 </script>
 @endpush
 @endsection

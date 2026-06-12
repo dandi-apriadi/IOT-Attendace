@@ -8,6 +8,7 @@ use App\Models\Kelas;
 use App\Models\MataKuliah;
 use App\Models\Mahasiswa;
 use App\Models\Device;
+use App\Models\DeviceCommand;
 use App\Models\Jadwal;
 use App\Models\Absensi;
 use App\Models\MataKuliahDosenAssignment;
@@ -368,6 +369,68 @@ class WebRoutesTest extends TestCase
         $response->assertStatus(200)
             ->assertSee('Pull Biometrik')
             ->assertSee('/master/devices/1/pull-biometrics', false);
+    }
+
+    public function test_zkteco_agent_command_status_memberikan_respons_realtime(): void
+    {
+        config(['agent.role' => 'server']);
+
+        $device = Device::create([
+            'device_id' => 'ZK_X609_1',
+            'name' => 'ZKTeco X609 #1',
+            'type' => 'zkteco',
+            'ip_address' => '192.168.0.10',
+            'port' => 4370,
+            'token_hash' => hash('sha256', 'test-token'),
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($this->admin);
+
+        $queued = $this->postJson("/master/devices/{$device->id}/test");
+        $queued->assertOk()
+            ->assertJson([
+                'ok' => true,
+                'queued' => true,
+            ])
+            ->assertJsonStructure(['command_id', 'status_url']);
+
+        $command = DeviceCommand::findOrFail($queued->json('command_id'));
+
+        $this->getJson("/master/devices/{$device->id}/commands/{$command->id}/status")
+            ->assertOk()
+            ->assertJson([
+                'ok' => true,
+                'status' => 'queued',
+                'pending' => true,
+                'done' => false,
+            ]);
+
+        $command->forceFill([
+            'status' => 'done',
+            'result' => [
+                'version' => 'Ver 6.60',
+                'serial_number' => 'SN123',
+                'device_name' => 'X609',
+                'platform' => 'ZMM',
+                'device_time' => '2026-06-12 20:00:00',
+            ],
+            'completed_at' => now(),
+        ])->save();
+
+        $this->getJson("/master/devices/{$device->id}/commands/{$command->id}/status")
+            ->assertOk()
+            ->assertJson([
+                'ok' => true,
+                'status' => 'done',
+                'pending' => false,
+                'done' => true,
+                'message' => 'Koneksi berhasil. Info perangkat sudah diterima dari agent.',
+                'result' => [
+                    'serial_number' => 'SN123',
+                    'device_name' => 'X609',
+                ],
+            ]);
     }
 
     public function test_update_device_tidak_bisa_mengubah_identitas_alat(): void

@@ -161,11 +161,13 @@ class DeviceController extends Controller
         }
 
         if ($this->usesAgentRelay()) {
-            app(DeviceCommandService::class)->enqueue($device, 'get_info', [], $request->user()?->id);
+            $command = app(DeviceCommandService::class)->enqueue($device, 'get_info', [], $request->user()?->id);
 
             return response()->json([
                 'ok' => true,
                 'queued' => true,
+                'command_id' => $command->id,
+                'status_url' => route('devices.commands.status', [$device, $command]),
                 'message' => 'Perintah cek koneksi dikirim ke agent lokal. Hasil tersedia setelah agent menjalankannya.',
             ]);
         }
@@ -187,11 +189,13 @@ class DeviceController extends Controller
         if ($this->usesAgentRelay()) {
             // Tampilkan hasil get_info terakhir bila ada, lalu antrekan yang baru.
             $last = $this->latestDoneResult($device, 'get_info');
-            app(DeviceCommandService::class)->enqueue($device, 'get_info', [], $request->user()?->id);
+            $command = app(DeviceCommandService::class)->enqueue($device, 'get_info', [], $request->user()?->id);
 
             return response()->json([
                 'ok' => true,
                 'queued' => true,
+                'command_id' => $command->id,
+                'status_url' => route('devices.commands.status', [$device, $command]),
                 'info' => $last,
                 'message' => $last
                     ? 'Menampilkan info terakhir dari agent. Perintah refresh dikirim.'
@@ -211,7 +215,7 @@ class DeviceController extends Controller
     /**
      * Mendorong seluruh mahasiswa ke perangkat.
      */
-    public function syncUsers(Request $request, Device $device): RedirectResponse
+    public function syncUsers(Request $request, Device $device): RedirectResponse|JsonResponse
     {
         if (! $this->isZkteco($device)) {
             return back()->with('error', 'Perangkat ini bukan tipe ZKTeco.');
@@ -220,7 +224,7 @@ class DeviceController extends Controller
         if ($this->usesAgentRelay()) {
             $commands = app(DeviceCommandService::class);
             $payload = $commands->buildAllUsersPayload();
-            $commands->enqueue($device, 'push_all_users', $payload, $request->user()?->id);
+            $command = $commands->enqueue($device, 'push_all_users', $payload, $request->user()?->id);
 
             AuditLogger::log(
                 $request,
@@ -228,6 +232,10 @@ class DeviceController extends Controller
                 'Antre sinkronisasi ' . count($payload['users']) . ' user ke perangkat ' . ($device->name ?: $device->device_id) . ' (via agent)',
                 $request->user()?->id
             );
+
+            if ($request->expectsJson()) {
+                return $this->queuedCommandResponse($device, $command, 'Perintah sinkronisasi ' . count($payload['users']) . ' user dikirim ke agent lokal, menunggu eksekusi.');
+            }
 
             return back()->with('success', 'Perintah sinkronisasi ' . count($payload['users']) . ' user dikirim ke agent lokal, menunggu eksekusi.');
         }
@@ -360,14 +368,18 @@ class DeviceController extends Controller
     /**
      * Menarik absensi dari perangkat secara manual.
      */
-    public function pullAttendance(Request $request, Device $device): RedirectResponse
+    public function pullAttendance(Request $request, Device $device): RedirectResponse|JsonResponse
     {
         if (! $this->isZkteco($device)) {
             return back()->with('error', 'Perangkat ini bukan tipe ZKTeco.');
         }
 
         if ($this->usesAgentRelay()) {
-            app(DeviceCommandService::class)->enqueue($device, 'pull_attendance', [], $request->user()?->id);
+            $command = app(DeviceCommandService::class)->enqueue($device, 'pull_attendance', [], $request->user()?->id);
+
+            if ($request->expectsJson()) {
+                return $this->queuedCommandResponse($device, $command, 'Perintah tarik absensi dikirim ke agent lokal. Menunggu hasil eksekusi agent.');
+            }
 
             return back()->with('success', 'Perintah tarik absensi dikirim ke agent lokal. Absensi akan masuk otomatis setelah agent menjalankannya.');
         }
@@ -392,14 +404,18 @@ class DeviceController extends Controller
      * Menarik data kartu dan fingerprint dari perangkat untuk mahasiswa yang
      * sudah terdaftar di sistem.
      */
-    public function pullBiometrics(Request $request, Device $device): RedirectResponse
+    public function pullBiometrics(Request $request, Device $device): RedirectResponse|JsonResponse
     {
         if (! $this->isZkteco($device)) {
             return back()->with('error', 'Perangkat ini bukan tipe ZKTeco.');
         }
 
         if ($this->usesAgentRelay()) {
-            app(DeviceCommandService::class)->enqueue($device, 'pull_biometrics', [], $request->user()?->id);
+            $command = app(DeviceCommandService::class)->enqueue($device, 'pull_biometrics', [], $request->user()?->id);
+
+            if ($request->expectsJson()) {
+                return $this->queuedCommandResponse($device, $command, 'Perintah tarik biometrik dikirim ke agent lokal. Menunggu hasil eksekusi agent.');
+            }
 
             return back()->with('success', 'Perintah tarik biometrik dikirim ke agent lokal. Data kartu/sidik jari mahasiswa akan diperbarui setelah agent membaca alat.');
         }
@@ -480,14 +496,14 @@ class DeviceController extends Controller
     /**
      * Mengosongkan log absensi di perangkat.
      */
-    public function clearAttendance(Request $request, Device $device): RedirectResponse
+    public function clearAttendance(Request $request, Device $device): RedirectResponse|JsonResponse
     {
         if (! $this->isZkteco($device)) {
             return back()->with('error', 'Perangkat ini bukan tipe ZKTeco.');
         }
 
         if ($this->usesAgentRelay()) {
-            app(DeviceCommandService::class)->enqueue($device, 'clear_attendance', [], $request->user()?->id);
+            $command = app(DeviceCommandService::class)->enqueue($device, 'clear_attendance', [], $request->user()?->id);
 
             AuditLogger::log(
                 $request,
@@ -495,6 +511,10 @@ class DeviceController extends Controller
                 'Antre kosongkan log absensi perangkat ' . ($device->name ?: $device->device_id) . ' (via agent)',
                 $request->user()?->id
             );
+
+            if ($request->expectsJson()) {
+                return $this->queuedCommandResponse($device, $command, 'Perintah kosongkan log absensi dikirim ke agent lokal. Menunggu hasil eksekusi agent.');
+            }
 
             return back()->with('success', 'Perintah kosongkan log absensi dikirim ke agent lokal.');
         }
@@ -518,14 +538,14 @@ class DeviceController extends Controller
     /**
      * Menyinkronkan waktu perangkat dengan server.
      */
-    public function syncTime(Request $request, Device $device): RedirectResponse
+    public function syncTime(Request $request, Device $device): RedirectResponse|JsonResponse
     {
         if (! $this->isZkteco($device)) {
             return back()->with('error', 'Perangkat ini bukan tipe ZKTeco.');
         }
 
         if ($this->usesAgentRelay()) {
-            app(DeviceCommandService::class)->enqueue($device, 'sync_time', [], $request->user()?->id);
+            $command = app(DeviceCommandService::class)->enqueue($device, 'sync_time', [], $request->user()?->id);
 
             AuditLogger::log(
                 $request,
@@ -533,6 +553,10 @@ class DeviceController extends Controller
                 'Antre sinkronisasi waktu perangkat ' . ($device->name ?: $device->device_id) . ' (via agent)',
                 $request->user()?->id
             );
+
+            if ($request->expectsJson()) {
+                return $this->queuedCommandResponse($device, $command, 'Perintah sinkronisasi waktu dikirim ke agent lokal. Menunggu hasil eksekusi agent.');
+            }
 
             return back()->with('success', 'Perintah sinkronisasi waktu dikirim ke agent lokal.');
         }
@@ -573,6 +597,78 @@ class DeviceController extends Controller
             ->first();
 
         return $command?->result;
+    }
+
+    public function commandStatus(Device $device, DeviceCommand $command): JsonResponse
+    {
+        if ((int) $command->device_id !== (int) $device->id) {
+            return response()->json(['ok' => false, 'message' => 'Perintah tidak cocok dengan perangkat ini.'], 404);
+        }
+
+        return response()->json($this->commandStatusPayload($command->fresh()));
+    }
+
+    private function queuedCommandResponse(Device $device, DeviceCommand $command, string $message): JsonResponse
+    {
+        return response()->json([
+            'ok' => true,
+            'queued' => true,
+            'command_id' => $command->id,
+            'status_url' => route('devices.commands.status', [$device, $command]),
+            'message' => $message,
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function commandStatusPayload(DeviceCommand $command): array
+    {
+        $isDone = $command->status === 'done';
+        $isFailed = $command->status === 'failed';
+
+        return [
+            'ok' => ! $isFailed,
+            'command_id' => $command->id,
+            'type' => $command->type,
+            'status' => $command->status,
+            'pending' => in_array($command->status, ['queued', 'dispatched'], true),
+            'done' => $isDone,
+            'failed' => $isFailed,
+            'message' => $this->commandStatusMessage($command),
+            'result' => $command->result,
+            'error' => $command->error,
+            'created_at' => $command->created_at?->toIso8601String(),
+            'dispatched_at' => $command->dispatched_at?->toIso8601String(),
+            'completed_at' => $command->completed_at?->toIso8601String(),
+        ];
+    }
+
+    private function commandStatusMessage(DeviceCommand $command): string
+    {
+        if ($command->status === 'queued') {
+            return 'Menunggu agent lokal mengambil perintah.';
+        }
+
+        if ($command->status === 'dispatched') {
+            return 'Agent lokal sedang menjalankan perintah.';
+        }
+
+        if ($command->status === 'failed') {
+            return $command->error ?: 'Perintah gagal dijalankan agent.';
+        }
+
+        $result = $command->result ?? [];
+
+        return match ($command->type) {
+            'get_info' => 'Koneksi berhasil. Info perangkat sudah diterima dari agent.',
+            'push_all_users' => 'Sinkronisasi selesai: ' . (int) ($result['pushed'] ?? 0) . ' user dikirim ke perangkat.',
+            'pull_attendance' => 'Tarik absensi selesai. ' . (string) ($result['note'] ?? 'Agent sudah menjalankan sinkronisasi absensi.'),
+            'pull_biometrics' => 'Tarik biometrik selesai. Data yang cocok sudah diperbarui di sistem.',
+            'clear_attendance' => ! empty($result['cleared']) ? 'Log absensi perangkat berhasil dikosongkan.' : 'Perintah kosongkan log selesai.',
+            'sync_time' => 'Waktu perangkat berhasil disinkronkan' . (! empty($result['device_time']) ? ': ' . $result['device_time'] : '.') ,
+            default => 'Perintah selesai dijalankan agent.',
+        };
     }
 
     /**
