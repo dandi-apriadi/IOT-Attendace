@@ -32,6 +32,13 @@
         <form action="{{ route('kelas.store') }}" method="POST" style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
             @csrf
             <input name="nama_kelas" type="text" placeholder="Nama Kelas (ex: IK-3B)" class="form-control" style="flex: 1; min-width: 200px;" required>
+            <input name="semester_level" type="number" min="1" max="14" placeholder="Semester" class="form-control" style="width: 130px;">
+            <select name="next_kelas_id" class="form-control" style="min-width: 220px;">
+                <option value="">Kelas berikutnya</option>
+                @foreach ($allKelas as $nextKelas)
+                    <option value="{{ $nextKelas->id }}">{{ $nextKelas->nama_kelas }}</option>
+                @endforeach
+            </select>
             <button class="btn-kinetic" type="submit"><i class="fas fa-plus"></i> Simpan</button>
         </form>
     </div>
@@ -44,7 +51,8 @@
                         <h4 class="display-font" style="font-size: 1.2rem;">{{ $kelas->nama_kelas }}</h4>
                         <span class="status-pill status-present" style="font-size: 0.65rem;">{{ number_format($kelas->mahasiswa_count) }} Mahasiswa</span>
                     </div>
-                    <p style="font-size: 0.8rem; color: var(--text-muted);">Database Management: {{ $kelas->nama_kelas }}</p>
+                    <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom:0.35rem;">Semester: {{ $kelas->semester_level ? 'S' . $kelas->semester_level : '-' }}</p>
+                    <p style="font-size: 0.8rem; color: var(--text-muted);">Berikutnya: {{ $kelas->nextKelas?->nama_kelas ?? 'Belum diatur' }}</p>
                 </div>
                 
                 <div style="margin-top: 1.5rem; display: flex; gap: 0.5rem; border-top: 1px solid #f1f3f5; padding-top: 1rem;">

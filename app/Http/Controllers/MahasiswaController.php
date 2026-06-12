@@ -23,6 +23,7 @@ class MahasiswaController extends Controller
 
         $search = (string) $request->query('q', '');
         $kelasId = (string) $request->query('kelas_id', '');
+        $statusAkademik = (string) $request->query('status_akademik', '');
 
         if ($search !== '') {
             $query->where(function ($q) use ($search) {
@@ -35,9 +36,14 @@ class MahasiswaController extends Controller
             $query->where('kelas_id', $kelasId);
         }
 
+        if ($statusAkademik !== '') {
+            $query->where('status_akademik', $statusAkademik);
+        }
+
         return view('master.mahasiswa', [
             'mahasiswaList' => $query->paginate(10)->withQueryString(),
             'kelasList' => Kelas::orderBy('nama_kelas')->get(),
+            'statusOptions' => $this->statusAkademikOptions(),
             'zktecoDevices' => Device::query()
                 ->where('is_active', true)
                 ->where('type', 'zkteco')
@@ -46,6 +52,7 @@ class MahasiswaController extends Controller
                 ->get(['id', 'device_id', 'name', 'ip_address', 'port']),
             'search' => $search,
             'kelasId' => $kelasId,
+            'statusAkademik' => $statusAkademik,
         ]);
     }
 
@@ -120,6 +127,7 @@ class MahasiswaController extends Controller
         return view('master.mahasiswa-edit', [
             'mahasiswa' => $mahasiswa,
             'kelasList' => Kelas::orderBy('nama_kelas')->get(),
+            'statusOptions' => $this->statusAkademikOptions(),
             'activeDevices' => Device::query()
                 ->where('is_active', true)
                 ->where('type', 'custom_iot')
@@ -380,6 +388,10 @@ class MahasiswaController extends Controller
             ],
             'nama' => ['required', 'string', 'max:255'],
             'kelas_id' => ['required', 'exists:kelas,id'],
+            'status_akademik' => ['required', Rule::in(array_keys($this->statusAkademikOptions()))],
+            'semester_level' => ['nullable', 'integer', 'min:1', 'max:14'],
+            'promotion_paused' => ['nullable', 'boolean'],
+            'promotion_note' => ['nullable', 'string', 'max:255'],
             'rfid_uid' => [
                 'nullable',
                 'string',
@@ -395,6 +407,23 @@ class MahasiswaController extends Controller
                 Rule::unique('mahasiswa', 'barcode_id')->ignore($mahasiswaId),
             ],
         ]);
+
+        $data['promotion_paused'] = $request->boolean('promotion_paused');
+        if (! $data['promotion_paused']) {
+            $data['promotion_note'] = null;
+        }
+
+        return $data;
+    }
+
+    private function statusAkademikOptions(): array
+    {
+        return [
+            'aktif' => 'Aktif',
+            'cuti' => 'Cuti',
+            'nonaktif' => 'Nonaktif',
+            'lulus' => 'Lulus',
+        ];
     }
 
     private function zktecoRegistrationMethodLabel(string $method): string

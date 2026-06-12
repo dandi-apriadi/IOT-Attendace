@@ -71,7 +71,14 @@
                 <option value="{{ $kelas->id }}" {{ (string) $kelasId === (string) $kelas->id ? 'selected' : '' }}>{{ $kelas->nama_kelas }}</option>
             @endforeach
         </select>
+        <select name="status_akademik" style="padding: 0.75rem; border: none; background: #F1F3F5; border-radius: 8px; min-width: 180px;">
+            <option value="">Semua Status</option>
+            @foreach ($statusOptions as $value => $label)
+                <option value="{{ $value }}" {{ (string) $statusAkademik === (string) $value ? 'selected' : '' }}>{{ $label }}</option>
+            @endforeach
+        </select>
         <button class="btn-kinetic" type="submit">Filter</button>
+        <a href="{{ route('semester.promotion') }}" class="btn-kinetic" style="text-decoration:none; background:#0ea5e9;"><i class="fas fa-arrow-up"></i> Review Kenaikan</a>
     </form>
 
     <form action="{{ route('mahasiswa.store') }}" method="POST" style="display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 0.75rem; margin-bottom: 1.5rem;">
@@ -84,6 +91,12 @@
                 <option value="{{ $kelas->id }}" {{ old('kelas_id') == $kelas->id ? 'selected' : '' }}>{{ $kelas->nama_kelas }}</option>
             @endforeach
         </select>
+        <select name="status_akademik" style="padding: 0.75rem; border: none; background: #F1F3F5; border-radius: 8px;" required>
+            @foreach ($statusOptions as $value => $label)
+                <option value="{{ $value }}" {{ old('status_akademik', 'aktif') === $value ? 'selected' : '' }}>{{ $label }}</option>
+            @endforeach
+        </select>
+        <input name="semester_level" type="number" min="1" max="14" value="{{ old('semester_level') }}" placeholder="Semester (opsional)" style="padding: 0.75rem; border: none; background: #F1F3F5; border-radius: 8px;">
         <input name="rfid_uid" type="text" value="{{ old('rfid_uid') }}" placeholder="RFID UID (opsional)" style="padding: 0.75rem; border: none; background: #F1F3F5; border-radius: 8px;">
         <input name="barcode_id" type="text" value="{{ old('barcode_id') }}" placeholder="Barcode ID (opsional)" style="padding: 0.75rem; border: none; background: #F1F3F5; border-radius: 8px;">
         <button class="btn-kinetic" type="submit"><i class="fas fa-plus"></i> Tambah Mahasiswa</button>
@@ -95,6 +108,7 @@
                 <th>NIM</th>
                 <th>Nama Lengkap</th>
                 <th>Kelas</th>
+                <th>Status</th>
                 <th>Identitas IoT</th>
                 <th>Aksi</th>
             </tr>
@@ -109,6 +123,17 @@
                     </td>
                     <td style="font-weight: 700;">{{ $mahasiswa->nama }}</td>
                     <td>{{ $mahasiswa->kelas?->nama_kelas ?? '-' }}</td>
+                    <td>
+                        <div style="display:flex; gap:0.35rem; flex-wrap:wrap;">
+                            <span style="font-size:0.65rem; background:#eef2ff; color:#3730a3; padding:2px 6px; border-radius:4px; font-weight:700;">{{ $statusOptions[$mahasiswa->status_akademik] ?? ucfirst($mahasiswa->status_akademik) }}</span>
+                            @if ($mahasiswa->semester_level)
+                                <span style="font-size:0.65rem; background:#f1f5f9; color:#334155; padding:2px 6px; border-radius:4px; font-weight:700;">S{{ $mahasiswa->semester_level }}</span>
+                            @endif
+                            @if ($mahasiswa->promotion_paused)
+                                <span style="font-size:0.65rem; background:#fff7ed; color:#9a3412; padding:2px 6px; border-radius:4px; font-weight:700;">DITAHAN</span>
+                            @endif
+                        </div>
+                    </td>
                     <td>
                         <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
                             @if ($mahasiswa->rfid_uid)
@@ -140,7 +165,7 @@
                 </tr>
             @empty
                 <tr>
-                    <td colspan="5" style="text-align:center; color:#6b7280;">Belum ada data mahasiswa.</td>
+                    <td colspan="6" style="text-align:center; color:#6b7280;">Belum ada data mahasiswa.</td>
                 </tr>
             @endforelse
         </tbody>

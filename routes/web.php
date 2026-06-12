@@ -102,6 +102,8 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::delete('/master/jadwal/{id}', [MasterDataController::class, 'destroyJadwal'])->name('jadwal.destroy');
     Route::get('/master/semester', [MasterDataController::class, 'semester'])->name('semester');
     Route::post('/master/semester', [MasterDataController::class, 'storeSemester'])->name('semester.store');
+    Route::get('/master/semester-promotion', [MasterDataController::class, 'semesterPromotion'])->name('semester.promotion');
+    Route::post('/master/semester-promotion/run', [MasterDataController::class, 'runSemesterPromotion'])->name('semester.promotion.run');
     Route::get('/master/semester/{id}/edit', [MasterDataController::class, 'editSemester'])->name('semester.edit');
     Route::put('/master/semester/{id}', [MasterDataController::class, 'updateSemester'])->name('semester.update');
     Route::delete('/master/semester/{id}', [MasterDataController::class, 'destroySemester'])->name('semester.destroy');

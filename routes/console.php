@@ -15,3 +15,8 @@ Schedule::command('zkteco:pull')
     ->everyFiveMinutes()
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/zkteco-pull.log'));
+
+Schedule::command('students:promote-semester')
+    ->dailyAt('00:30')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/student-semester-promotion-preview.log'));

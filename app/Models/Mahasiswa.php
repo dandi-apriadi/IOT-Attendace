@@ -15,11 +15,24 @@ class Mahasiswa extends Model
         'nim',
         'nama',
         'kelas_id',
+        'status_akademik',
+        'semester_level',
+        'promotion_paused',
+        'promotion_note',
+        'last_promoted_at',
         'rfid_uid',
         'fingerprint_data',
         'face_model_data',
         'barcode_id',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'promotion_paused' => 'boolean',
+            'last_promoted_at' => 'datetime',
+        ];
+    }
 
     public function kelas()
     {
@@ -34,5 +47,10 @@ class Mahasiswa extends Model
     public function corrections()
     {
         return $this->hasMany(Correction::class);
+    }
+
+    public function semesterPromotions()
+    {
+        return $this->hasMany(StudentSemesterPromotion::class);
     }
 }

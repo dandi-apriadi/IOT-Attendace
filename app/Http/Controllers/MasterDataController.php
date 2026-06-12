@@ -11,6 +11,7 @@ use App\Models\MataKuliahDosenAssignment;
 use App\Models\SemesterAkademik;
 use App\Models\User;
 use App\Services\AuditLogger;
+use App\Services\SemesterPromotionService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -21,12 +22,14 @@ class MasterDataController extends Controller
 {
     public function kelas(): View
     {
-        $kelasList = Kelas::withCount('mahasiswa')
+        $kelasList = Kelas::with(['nextKelas'])
+            ->withCount('mahasiswa')
             ->orderBy('nama_kelas')
             ->paginate(12);
 
         return view('master.kelas', [
             'kelasList' => $kelasList,
+            'allKelas' => Kelas::orderBy('nama_kelas')->get(),
         ]);
     }
 
@@ -499,6 +502,8 @@ class MasterDataController extends Controller
     {
         $data = $request->validate([
             'nama_kelas' => ['required', 'string', 'max:50', 'unique:kelas,nama_kelas'],
+            'semester_level' => ['nullable', 'integer', 'min:1', 'max:14'],
+            'next_kelas_id' => ['nullable', 'exists:kelas,id'],
         ]);
 
         $kelas = Kelas::create($data);
@@ -518,6 +523,10 @@ class MasterDataController extends Controller
         $kelas = Kelas::findOrFail($id);
         return view('master.kelas-edit', [
             'kelas' => $kelas,
+            'allKelas' => Kelas::query()
+                ->whereKeyNot($kelas->id)
+                ->orderBy('nama_kelas')
+                ->get(),
         ]);
     }
 
@@ -527,6 +536,8 @@ class MasterDataController extends Controller
         
         $data = $request->validate([
             'nama_kelas' => ['required', 'string', 'max:50', Rule::unique('kelas')->ignore($kelas->id)],
+            'semester_level' => ['nullable', 'integer', 'min:1', 'max:14'],
+            'next_kelas_id' => ['nullable', Rule::exists('kelas', 'id')->where(fn ($query) => $query->where('id', '!=', $kelas->id))],
         ]);
 
         $kelas->update($data);
@@ -852,6 +863,43 @@ class MasterDataController extends Controller
         );
 
         return redirect()->route('semester')->with('success', 'Semester ' . $semester->display_name . ' berhasil diaktifkan.');
+    }
+
+    public function semesterPromotion(Request $request, SemesterPromotionService $service): View
+    {
+        $kelasId = $request->query('kelas_id') !== null && $request->query('kelas_id') !== ''
+            ? (int) $request->query('kelas_id')
+            : null;
+
+        return view('master.semester-promotion', [
+            'result' => $service->preview($kelasId),
+            'kelasList' => Kelas::with('nextKelas')->orderBy('nama_kelas')->get(),
+            'selectedKelasId' => $kelasId,
+        ]);
+    }
+
+    public function runSemesterPromotion(Request $request, SemesterPromotionService $service): RedirectResponse
+    {
+        $data = $request->validate([
+            'kelas_id' => ['nullable', 'exists:kelas,id'],
+            'note' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $result = $service->execute(
+            $data['note'] ?? 'Kenaikan semester dari panel admin',
+            isset($data['kelas_id']) && $data['kelas_id'] !== '' ? (int) $data['kelas_id'] : null
+        );
+
+        AuditLogger::log(
+            $request,
+            'promote_semester_mahasiswa',
+            'Kenaikan semester mahasiswa: ' . $result->promoted . ' dipromosikan, ' . $result->blocked->count() . ' perlu dicek',
+            $request->user()?->id
+        );
+
+        return redirect()
+            ->route('semester.promotion', array_filter(['kelas_id' => $data['kelas_id'] ?? null]))
+            ->with('success', $result->promoted . ' mahasiswa berhasil dinaikkan. ' . $result->blocked->count() . ' mahasiswa perlu dicek admin.');
     }
 }
 

@@ -95,6 +95,30 @@
         </div>
 
         <div>
+            <label for="status_akademik" style="font-size:0.75rem; color:#6b7280; display:block; margin-bottom:0.4rem;">Status Akademik</label>
+            <select id="status_akademik" name="status_akademik" style="width:100%; padding:0.75rem; border:none; background:#F1F3F5; border-radius:8px;" required>
+                @foreach ($statusOptions as $value => $label)
+                    <option value="{{ $value }}" {{ (string) old('status_akademik', $mahasiswa->status_akademik) === (string) $value ? 'selected' : '' }}>{{ $label }}</option>
+                @endforeach
+            </select>
+        </div>
+
+        <div>
+            <label for="semester_level" style="font-size:0.75rem; color:#6b7280; display:block; margin-bottom:0.4rem;">Semester Mahasiswa</label>
+            <input id="semester_level" name="semester_level" type="number" min="1" max="14" value="{{ old('semester_level', $mahasiswa->semester_level) }}" style="width:100%; padding:0.75rem; border:none; background:#F1F3F5; border-radius:8px;">
+        </div>
+
+        <div style="display:flex; align-items:center; gap:0.5rem; padding:0.75rem; background:#fff7ed; border-radius:8px;">
+            <input id="promotion_paused" name="promotion_paused" type="checkbox" value="1" {{ old('promotion_paused', $mahasiswa->promotion_paused) ? 'checked' : '' }} style="width:18px; height:18px;">
+            <label for="promotion_paused" style="font-size:0.82rem; color:#9a3412; font-weight:700;">Tahan kenaikan semester otomatis</label>
+        </div>
+
+        <div>
+            <label for="promotion_note" style="font-size:0.75rem; color:#6b7280; display:block; margin-bottom:0.4rem;">Catatan Kendala</label>
+            <input id="promotion_note" name="promotion_note" type="text" value="{{ old('promotion_note', $mahasiswa->promotion_note) }}" style="width:100%; padding:0.75rem; border:none; background:#F1F3F5; border-radius:8px;" placeholder="Contoh: cuti, nonaktif, tunggu verifikasi">
+        </div>
+
+        <div>
             <label for="rfid_uid" style="font-size:0.75rem; color:#6b7280; display:block; margin-bottom:0.4rem;">RFID UID</label>
             <input id="rfid_uid" name="rfid_uid" type="text" value="{{ old('rfid_uid', $mahasiswa->rfid_uid) }}" style="width:100%; padding:0.75rem; border:none; background:#F1F3F5; border-radius:8px;">
         </div>

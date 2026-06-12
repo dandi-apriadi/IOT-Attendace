@@ -11,11 +11,25 @@ class Kelas extends Model
 
     protected $table = 'kelas';
 
-    protected $fillable = ['nama_kelas'];
+    protected $fillable = [
+        'nama_kelas',
+        'semester_level',
+        'next_kelas_id',
+    ];
 
     public function mahasiswa()
     {
         return $this->hasMany(Mahasiswa::class);
+    }
+
+    public function nextKelas()
+    {
+        return $this->belongsTo(self::class, 'next_kelas_id');
+    }
+
+    public function previousKelas()
+    {
+        return $this->hasMany(self::class, 'next_kelas_id');
     }
 
     public function jadwal()

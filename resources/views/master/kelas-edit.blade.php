@@ -20,6 +20,27 @@
                 @enderror
             </div>
 
+            <div class="form-group">
+                <label>Semester Level</label>
+                <input type="number" name="semester_level" min="1" max="14" value="{{ old('semester_level', $kelas->semester_level) }}" class="form-control" placeholder="Contoh: 3">
+                @error('semester_level')
+                    <span style="color: #BA1A1A; font-size: 0.8rem;">{{ $message }}</span>
+                @enderror
+            </div>
+
+            <div class="form-group">
+                <label>Kelas Berikutnya</label>
+                <select name="next_kelas_id" class="form-control">
+                    <option value="">Belum diatur</option>
+                    @foreach ($allKelas as $nextKelas)
+                        <option value="{{ $nextKelas->id }}" {{ (string) old('next_kelas_id', $kelas->next_kelas_id) === (string) $nextKelas->id ? 'selected' : '' }}>{{ $nextKelas->nama_kelas }}</option>
+                    @endforeach
+                </select>
+                @error('next_kelas_id')
+                    <span style="color: #BA1A1A; font-size: 0.8rem;">{{ $message }}</span>
+                @enderror
+            </div>
+
             <div style="margin-top: 2rem; display: flex; gap: 1rem;">
                 <button type="submit" class="btn-kinetic" style="flex-grow: 1;">Simpan Perubahan</button>
                 <a href="{{ route('kelas') }}" class="btn-secondary" style="text-decoration: none; text-align: center;">Batal</a>
