@@ -123,11 +123,16 @@ class MahasiswaController extends Controller
     public function edit(Mahasiswa $mahasiswa): View
     {
         $onlineThreshold = now()->subMinutes(2);
+        $customDeviceCount = Device::query()
+            ->where('is_active', true)
+            ->where('type', 'custom_iot')
+            ->count();
 
         return view('master.mahasiswa-edit', [
             'mahasiswa' => $mahasiswa,
             'kelasList' => Kelas::orderBy('nama_kelas')->get(),
             'statusOptions' => $this->statusAkademikOptions(),
+            'customDeviceCount' => $customDeviceCount,
             'activeDevices' => Device::query()
                 ->where('is_active', true)
                 ->where('type', 'custom_iot')
@@ -253,11 +258,12 @@ class MahasiswaController extends Controller
         $device = Device::query()
             ->where('id', $data['device_id'])
             ->where('is_active', true)
+            ->where('type', 'custom_iot')
             ->first();
 
         if (! $device) {
             return response()->json([
-                'message' => 'Perangkat IoT tidak aktif atau tidak ditemukan.',
+                'message' => 'Perangkat Custom IoT tidak aktif atau tidak ditemukan.',
             ], 422);
         }
 

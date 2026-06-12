@@ -61,9 +61,9 @@
         </div>
 
         <div style="margin-bottom: 1.5rem;">
-            <label class="form-label">Token Auth</label>
+            <label class="form-label">Token Custom IoT</label>
             <input type="text" name="token_hash" class="form-control" value="{{ old('token_hash', $device->token_hash) }}">
-            <small style="color: #6b7280; font-size: 0.75rem;">Untuk perangkat Custom IoT (HTTP). Kosongkan untuk ZKTeco.</small>
+            <small style="color: #6b7280; font-size: 0.75rem;">Boleh isi token asli firmware atau hash SHA-256. Kosongkan untuk memakai token lama.</small>
         </div>
 
         <div style="margin-bottom: 2rem;">
