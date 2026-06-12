@@ -1,7 +1,7 @@
 :root {
-    --primary-blue: #001E40;
-    --primary-blue-container: #003366;
-    --kinetic-yellow: #FCD400;
+    --primary-blue: #10213D;
+    --primary-blue-container: #132846;
+    --kinetic-yellow: #129B78;
     --text-on-blue: #FFFFFF;
     --text-primary: #191C1E;
     --text-muted: #43474F;
@@ -64,6 +64,11 @@ h1, h2, h3, .display-font {
 
 .sidebar-brand i {
     color: var(--kinetic-yellow);
+}
+
+.sidebar-brand img {
+    flex: 0 0 auto;
+    filter: drop-shadow(0 4px 10px rgba(18, 155, 120, 0.25));
 }
 
 .nav-menu {
@@ -162,10 +167,10 @@ header {
 }
 
 .nav-link.active {
-    background: rgba(252, 212, 0, 0.1);
+    background: rgba(18, 155, 120, 0.16);
     color: #FFFFFF;
     border-left: 4px solid var(--kinetic-yellow);
-    box-shadow: inset 4px 0 15px rgba(252, 212, 0, 0.05);
+    box-shadow: inset 4px 0 15px rgba(18, 155, 120, 0.08);
 }
 
 .user-badge {
@@ -202,7 +207,7 @@ header {
 
 .btn-kinetic {
     background-color: var(--kinetic-yellow);
-    color: #000;
+    color: #FFFFFF;
     border: none;
     padding: 0.75rem 1.75rem;
     border-radius: var(--radius-md);
@@ -217,7 +222,7 @@ header {
 
 .btn-kinetic:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 15px rgba(252, 212, 0, 0.3);
+    box-shadow: 0 6px 15px rgba(18, 155, 120, 0.28);
     filter: brightness(1.1);
 }
 
@@ -270,7 +275,7 @@ header {
 .form-control:focus {
     background: #FFFFFF;
     border-color: var(--kinetic-yellow);
-    box-shadow: 0 0 0 4px rgba(252, 212, 0, 0.1);
+    box-shadow: 0 0 0 4px rgba(18, 155, 120, 0.12);
 }
 
 .form-control::placeholder {
@@ -383,8 +388,8 @@ tr:nth-child(even) td {
 
 .pagination-container span[aria-current="page"] > span {
     background: var(--kinetic-yellow);
-    color: #000;
-    box-shadow: 0 2px 8px rgba(252, 212, 0, 0.2);
+    color: #FFFFFF;
+    box-shadow: 0 2px 8px rgba(18, 155, 120, 0.22);
 }
 
 .pagination-container span[aria-disabled="true"] > span {

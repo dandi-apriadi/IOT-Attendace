@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login | IoT Attendance System</title>
+    <title>Login | PresenSync</title>
+    <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
+    <link rel="icon" type="image/png" href="{{ asset('favicon.png') }}">
+    <link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.png') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="{{ asset('css/premium-design.css') }}">
@@ -32,9 +35,10 @@
             text-align: center;
         }
         .login-logo {
-            font-size: 3rem;
-            color: var(--kinetic-yellow);
-            margin-bottom: 1.5rem;
+            width: min(260px, 82%);
+            height: auto;
+            margin: 0 auto 1.25rem;
+            display: block;
         }
         .form-group {
             text-align: left;
@@ -73,9 +77,8 @@
 </head>
 <body>
     <div class="login-card">
-        <div class="login-logo"><i class="fas fa-microchip"></i></div>
-        <h2 class="display-font" style="margin-bottom: 0.5rem;">Tech-Presence</h2>
-        <p style="opacity: 0.6; margin-bottom: 3rem;">Politeknik Negeri Manado IoT Gateway</p>
+        <img class="login-logo" src="{{ asset('images/presensync-logo-card.png') }}" alt="PresenSync">
+        <p style="opacity: 0.72; margin-bottom: 3rem;">Smart Attendance Sync Platform</p>
         
         @if ($errors->any())
             <div style="background: rgba(186, 26, 26, 0.2); border: 1px solid rgba(186, 26, 26, 0.5); padding: 0.75rem; border-radius: 10px; margin-bottom: 1rem; text-align: left; font-size: 0.9rem;">
@@ -96,7 +99,7 @@
             <button type="submit" class="btn-kinetic login-btn">MASUK SEKARANG</button>
         </form>
         
-        <p style="margin-top: 2rem; font-size: 0.8rem; opacity: 0.5;">Design by iot-project</p>
+        <p style="margin-top: 2rem; font-size: 0.8rem; opacity: 0.5;">PresenSync by Politeknik Negeri Manado</p>
     </div>
 </body>
 </html>

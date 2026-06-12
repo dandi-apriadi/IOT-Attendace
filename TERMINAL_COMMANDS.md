@@ -1,6 +1,6 @@
 # Perintah Terminal Project
 
-Dokumen ini berisi daftar perintah untuk menjalankan proyek Laravel IoT-Attendance di beberapa terminal.
+Dokumen ini berisi daftar perintah untuk menjalankan proyek Laravel PresenSync di beberapa terminal.
 
 ## Terminal 0 - Install Vendor dan Komponen Dasar
 

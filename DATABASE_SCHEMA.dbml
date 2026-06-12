@@ -1,4 +1,4 @@
-// IoT Attendance System database schema for dbdiagram.io
+// PresenSync database schema for dbdiagram.io
 
 Enum user_role {
   admin

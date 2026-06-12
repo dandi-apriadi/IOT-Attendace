@@ -20,7 +20,7 @@ use App\Http\Controllers\UserController;
 
 /*
 |--------------------------------------------------------------------------
-| Web Routes - IoT Attendance System Prototype
+| Web Routes - PresenSync
 |--------------------------------------------------------------------------
 */
 
