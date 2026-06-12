@@ -16,68 +16,102 @@
             align-items: center;
             justify-content: center;
             min-height: 100vh;
-            background: linear-gradient(rgba(0, 30, 64, 0.7), rgba(0, 30, 64, 0.7)), url('{{ asset("images/background.png") }}');
-            background-size: cover;
-            background-position: center;
-            background-attachment: fixed;
+            position: relative;
+            isolation: isolate;
+            overflow-x: hidden;
+            background: oklch(19% 0.045 241);
             padding: 20px;
             font-family: 'Inter', sans-serif;
+        }
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            pointer-events: none;
+            background:
+                radial-gradient(circle at 30% 22%, rgba(28, 173, 137, 0.38), transparent 34%),
+                linear-gradient(135deg, rgba(8, 20, 42, 0.82), rgba(10, 40, 65, 0.66) 52%, rgba(21, 125, 104, 0.54));
+        }
+        .login-video-bg {
+            position: fixed;
+            inset: 0;
+            z-index: -2;
+            width: 100vw;
+            height: 100vh;
+            object-fit: cover;
+            pointer-events: none;
+            filter: saturate(0.94) contrast(1.05);
+            background: url('{{ asset("images/presensync-video-poster.jpg") }}') center / cover no-repeat;
         }
         .login-card {
             max-width: 440px;
             width: 100%;
-            background: rgba(255, 255, 255, 0.05);
+            position: relative;
+            background: rgba(245, 250, 249, 0.08);
             backdrop-filter: blur(40px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(230, 247, 244, 0.18);
             border-radius: var(--radius-xl);
             padding: 3rem;
-            color: #fff;
+            color: oklch(97% 0.006 190);
             text-align: center;
+            box-shadow: 0 28px 90px rgba(2, 10, 26, 0.38);
         }
         .login-logo {
             width: min(260px, 82%);
             height: auto;
             margin: 0 auto 1.25rem;
             display: block;
+            filter: drop-shadow(0 16px 34px rgba(0, 8, 24, 0.42));
         }
         .form-group {
             text-align: left;
             margin-bottom: 1.5rem;
         }
-        .form-label {
+        .login-card .form-label {
             display: block;
             font-size: 0.8rem;
             text-transform: uppercase;
             letter-spacing: 0.1em;
             margin-bottom: 0.5rem;
-            opacity: 0.7;
+            color: rgba(245, 250, 249, 0.82);
+            text-shadow: 0 1px 12px rgba(0, 8, 24, 0.34);
         }
         .form-control {
             width: 100%;
-            background: rgba(255, 255, 255, 0.2);
+            background: rgba(245, 250, 249, 0.2);
             border: none;
             padding: 1rem;
             border-radius: var(--radius-md);
-            color: #fff;
+            color: oklch(97% 0.006 190);
             font-family: inherit;
         }
         .form-control::placeholder {
-            color: rgba(255, 255, 255, 0.5);
+            color: rgba(245, 250, 249, 0.54);
         }
         .form-control:focus {
             outline: 2px solid var(--kinetic-yellow);
-            background: #fff;
+            background: oklch(98% 0.006 190);
             color: var(--text-primary);
         }
         .login-btn {
             width: 100%;
             margin-top: 1rem;
         }
+        @media (prefers-reduced-motion: reduce) {
+            .login-video-bg {
+                display: none;
+            }
+        }
     </style>
 </head>
 <body>
+    <video class="login-video-bg" autoplay muted loop playsinline preload="metadata" poster="{{ asset('images/presensync-video-poster.jpg') }}" aria-hidden="true">
+        <source src="{{ asset('videos/presensync-intro.webm') }}" type="video/webm">
+        <source src="{{ asset('videos/presensync-intro.mp4') }}" type="video/mp4">
+    </video>
     <div class="login-card">
-        <img class="login-logo" src="{{ asset('images/presensync-logo-card.png') }}" alt="PresenSync">
+        <img class="login-logo" src="{{ asset('images/presensync-logo-web.png') }}" alt="PresenSync">
         <p style="opacity: 0.72; margin-bottom: 3rem;">Smart Attendance Sync Platform</p>
         
         @if ($errors->any())
