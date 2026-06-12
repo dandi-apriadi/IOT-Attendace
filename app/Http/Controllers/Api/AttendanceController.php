@@ -7,20 +7,15 @@ use App\Models\Mahasiswa;
 use App\Models\Jadwal;
 use App\Models\Absensi;
 use App\Models\PerformanceMetric;
+use App\Services\AttendanceSessionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Cache;
 use Carbon\Carbon;
 use Throwable;
 
 class AttendanceController extends Controller
 {
-    /**
-     * Standard grace period for attendance in minutes.
-     */
-    const GRACE_PERIOD_MINUTES = 15;
-
     /**
      * Maximum meetings allowed per course in a semester.
      */
@@ -29,7 +24,7 @@ class AttendanceController extends Controller
     /**
      * Handle IoT Attendance Tap
      */
-    public function store(Request $request)
+    public function store(Request $request, AttendanceSessionService $attendanceSessions)
     {
         $requestStartedAt = microtime(true);
         $queryDurationMs = 0.0;
@@ -64,42 +59,9 @@ class AttendanceController extends Controller
         }
 
         // 2. Determine Active Schedule (PRIORITY: Manual Cache > Automatic Schedule)
-        $jadwal = null;
-        $manualSession = Cache::get('active_attendance_session');
-        $baselineTime = null;
-
-        if ($manualSession) {
-            $jadwal = Jadwal::query()
-                ->with(['mata_kuliah', 'semesterAkademik'])
-                ->where('mata_kuliah_id', $manualSession['mata_kuliah_id'])
-                ->where('kelas_id', $manualSession['kelas_id'])
-                ->whereHas('semesterAkademik', function ($q) use ($date) {
-                    $q->whereDate('tanggal_mulai', '<=', $date)
-                        ->whereDate('tanggal_selesai', '>=', $date);
-                })
-                ->first();
-
-            if ($jadwal) {
-                $baselineTime = $jadwal->jam_mulai;
-            }
-        }
-
-        if (!$jadwal) {
-            $dayNames = $this->getDayNames($now);
-            $jadwal = Jadwal::query()
-                ->with(['mata_kuliah', 'semesterAkademik'])
-                ->where('kelas_id', $mahasiswa->kelas_id)
-                ->whereIn('hari', $dayNames)
-                ->where('jam_mulai', '<=', $time)
-                ->where('jam_selesai', '>=', $time)
-                ->whereHas('semesterAkademik', function ($q) use ($date) {
-                    $q->whereDate('tanggal_mulai', '<=', $date)
-                        ->whereDate('tanggal_selesai', '>=', $date);
-                })
-                ->first();
-
-            $baselineTime = $jadwal?->jam_mulai;
-        }
+        $scheduleMatch = $attendanceSessions->resolveTapSchedule($mahasiswa, $now);
+        $jadwal = $scheduleMatch['jadwal'] ?? null;
+        $baselineTime = $scheduleMatch['baseline_time'] ?? null;
 
         if (!$jadwal) {
             $queryDurationMs = (microtime(true) - $queryStartedAt) * 1000;
@@ -139,7 +101,7 @@ class AttendanceController extends Controller
         }
 
         // 3. Mark Attendance with transaction and lock to reduce race conditions.
-        $status = $this->calculateStatus($time, $baselineTime);
+        $status = $attendanceSessions->statusForTap($time, $baselineTime);
 
         $attendanceResult = DB::transaction(function () use ($mahasiswa, $jadwal, $courseJadwalIds, $date, $time, $request, $status) {
             $courseAttendanceQuery = Absensi::query()
@@ -195,7 +157,7 @@ class AttendanceController extends Controller
         $queryDurationMs = (microtime(true) - $queryStartedAt) * 1000;
         $resultCount = 1;
         $this->recordApiPerformanceMetric($queryDurationMs, $requestStartedAt, $resultCount, $request);
-        $this->forgetLiveMonitoringCache($date, (int) $jadwal->id);
+        $attendanceSessions->forgetLiveMonitoringCache($date, (int) $jadwal->id);
 
         return response()->json([
             'status' => 'success',
@@ -206,12 +168,6 @@ class AttendanceController extends Controller
                 'keterangan' => $status
             ]
         ]);
-    }
-
-    private function forgetLiveMonitoringCache(string $date, int $jadwalId): void
-    {
-        Cache::forget(sprintf('monitoring.live.payload.%s.%s', $date, 'all'));
-        Cache::forget(sprintf('monitoring.live.payload.%s.%d', $date, $jadwalId));
     }
 
     private function recordApiPerformanceMetric(float $queryDurationMs, float $requestStartedAt, int $resultCount, Request $request): void
@@ -234,29 +190,4 @@ class AttendanceController extends Controller
         }
     }
 
-    private function calculateStatus($tapTime, $baselineTime)
-    {
-        $tap = Carbon::parse($tapTime);
-        $baseline = Carbon::parse($baselineTime);
-
-        if ($tap->gt($baseline->copy()->addMinutes(self::GRACE_PERIOD_MINUTES))) {
-            return 'Telat';
-        }
-        return 'Hadir';
-    }
-
-    private function getDayNames($date): array
-    {
-        $map = [
-            1 => ['Senin', 'Monday'],
-            2 => ['Selasa', 'Tuesday'],
-            3 => ['Rabu', 'Wednesday'],
-            4 => ['Kamis', 'Thursday'],
-            5 => ['Jumat', 'Friday'],
-            6 => ['Sabtu', 'Saturday'],
-            7 => ['Minggu', 'Sunday'],
-        ];
-
-        return $map[$date->dayOfWeekIso] ?? [$date->format('l')];
-    }
 }

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Absensi;
 use App\Models\Jadwal;
 use App\Models\Mahasiswa;
+use App\Services\AttendanceSessionService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
@@ -25,11 +26,16 @@ class MonitoringLiveController extends Controller
         $activeSessionInfo = null;
 
         if ($activeSession) {
-            $jadwal = Jadwal::query()
+            $jadwalQuery = Jadwal::query()
                 ->with(['mata_kuliah:id,kode_mk,nama_mk', 'kelas:id,nama_kelas'])
                 ->where('mata_kuliah_id', $activeSession['mata_kuliah_id'])
-                ->where('kelas_id', $activeSession['kelas_id'])
-                ->first();
+                ->where('kelas_id', $activeSession['kelas_id']);
+
+            if (! empty($activeSession['jadwal_id'])) {
+                $jadwalQuery->whereKey((int) $activeSession['jadwal_id']);
+            }
+
+            $jadwal = $jadwalQuery->first();
 
             if ($jadwal) {
                 $activeSessionInfo = [
@@ -117,12 +123,6 @@ class MonitoringLiveController extends Controller
             ->with('success', 'Data live monitoring berhasil diperbarui.');
     }
 
-    private function getIndoDayName(Carbon $date): string
-    {
-        // Database stores English day names (Monday, Tuesday, etc.)
-        return $date->format('l');
-    }
-
     private function normalizeDate(string $date): string
     {
         try {
@@ -134,16 +134,13 @@ class MonitoringLiveController extends Controller
 
     private function buildLivePayload(string $selectedDate, mixed $selectedJadwalId): array
     {
-        $cacheKey = sprintf(
-            'monitoring.live.payload.%s.%s',
-            $selectedDate,
-            (string) ($selectedJadwalId ?: 'all')
-        );
+        $attendanceSessions = $this->attendanceSessions();
+        $cacheKey = $attendanceSessions->livePayloadCacheKey($selectedDate, $selectedJadwalId);
 
-        return Cache::remember($cacheKey, now()->addSeconds(5), function () use ($selectedDate, $selectedJadwalId): array {
+        return Cache::remember($cacheKey, now()->addSeconds(5), function () use ($selectedDate, $selectedJadwalId, $attendanceSessions): array {
             $now = now();
             $selectedDateCarbon = Carbon::parse($selectedDate);
-            $dayName = $this->getIndoDayName($selectedDateCarbon);
+            $dayNames = $attendanceSessions->dayNames($selectedDateCarbon);
             $normalizedJadwalId = $selectedJadwalId ? (int) $selectedJadwalId : null;
 
             $attendancePerSession = Absensi::query()
@@ -154,11 +151,11 @@ class MonitoringLiveController extends Controller
 
             $sessions = Jadwal::query()
                 ->with(['mata_kuliah:id,nama_mk,kode_mk', 'kelas:id,nama_kelas', 'dosen:id,name'])
-                ->where('hari', $dayName)
+                ->whereIn('hari', $dayNames)
                 ->orderBy('jam_mulai')
                 ->get()
-                ->map(function (Jadwal $jadwal) use ($attendancePerSession, $selectedDateCarbon, $now): array {
-                    $phase = $this->determineSessionPhase(
+                ->map(function (Jadwal $jadwal) use ($attendancePerSession, $selectedDateCarbon, $now, $attendanceSessions): array {
+                    $phase = $attendanceSessions->sessionPhase(
                         $selectedDateCarbon,
                         (string) $jadwal->jam_mulai,
                         (string) $jadwal->jam_selesai,
@@ -176,7 +173,7 @@ class MonitoringLiveController extends Controller
                         'end_time' => substr((string) $jadwal->jam_selesai, 0, 5),
                         'attendance_count' => (int) ($attendancePerSession[$jadwal->id] ?? 0),
                         'phase' => $phase,
-                        'phase_label' => $this->sessionPhaseLabel($phase),
+                        'phase_label' => $attendanceSessions->sessionPhaseLabel($phase),
                     ];
                 })
                 ->values()
@@ -247,12 +244,15 @@ class MonitoringLiveController extends Controller
             })->values()->all();
 
             if ($normalizedJadwalId && $selectedSession) {
-                $attendedMahasiswaIds = collect($records)
-                    ->pluck('id')
-                    ->filter()
-                    ->isNotEmpty()
-                    ? $liveStream->pluck('mahasiswa_id')->filter()->values()->all()
-                    : [];
+                $attendedMahasiswaIds = Absensi::query()
+                    ->whereDate('tanggal', $selectedDate)
+                    ->where('jadwal_id', $normalizedJadwalId)
+                    ->whereNotNull('mahasiswa_id')
+                    ->distinct()
+                    ->pluck('mahasiswa_id')
+                    ->map(static fn ($id): int => (int) $id)
+                    ->values()
+                    ->all();
 
                 $pendingRows = Mahasiswa::query()
                     ->select(['id', 'nama', 'nim'])
@@ -262,9 +262,9 @@ class MonitoringLiveController extends Controller
                     })
                     ->orderBy('nama')
                     ->get()
-                    ->map(function (Mahasiswa $mahasiswa) use ($selectedSession, $selectedDate, $normalizedJadwalId): array {
-                        $isAbsent = ($selectedSession['phase'] ?? '') === 'completed';
-                        $status = $isAbsent ? (string) config('attendance.absensi_absent_status', 'Alpa') : 'Pending';
+                    ->map(function (Mahasiswa $mahasiswa) use ($selectedSession, $selectedDate, $normalizedJadwalId, $attendanceSessions): array {
+                        $status = $attendanceSessions->missingAttendanceStatus((string) ($selectedSession['phase'] ?? ''));
+                        $isAbsent = $status !== 'Pending';
 
                         return [
                             'id' => null,
@@ -314,47 +314,13 @@ class MonitoringLiveController extends Controller
         });
     }
 
-    private function determineSessionPhase(
-        Carbon $selectedDate,
-        string $jamMulai,
-        string $jamSelesai,
-        Carbon $now
-    ): string {
-        $today = $now->copy()->startOfDay();
-        $sessionDate = $selectedDate->copy()->startOfDay();
-
-        if ($sessionDate->lt($today)) {
-            return 'completed';
-        }
-
-        if ($sessionDate->gt($today)) {
-            return 'upcoming';
-        }
-
-        $currentTime = $now->format('H:i:s');
-        if ($currentTime < $jamMulai) {
-            return 'upcoming';
-        }
-
-        if ($currentTime > $jamSelesai) {
-            return 'completed';
-        }
-
-        return 'ongoing';
-    }
-
-    private function sessionPhaseLabel(string $phase): string
-    {
-        return match ($phase) {
-            'completed' => 'Selesai',
-            'ongoing' => 'Sedang Berlangsung',
-            default => 'Akan Datang',
-        };
-    }
-
     private function forgetLiveCache(string $selectedDate, int $jadwalId): void
     {
-        Cache::forget(sprintf('monitoring.live.payload.%s.%s', $selectedDate, 'all'));
-        Cache::forget(sprintf('monitoring.live.payload.%s.%d', $selectedDate, $jadwalId));
+        $this->attendanceSessions()->forgetLiveMonitoringCache($selectedDate, $jadwalId);
+    }
+
+    private function attendanceSessions(): AttendanceSessionService
+    {
+        return app(AttendanceSessionService::class);
     }
 }

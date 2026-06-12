@@ -9,6 +9,7 @@ use App\Models\Kelas;
 use App\Models\Mahasiswa;
 use App\Models\MataKuliah;
 use App\Models\MataKuliahDosenAssignment;
+use App\Services\AttendanceSessionService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -43,14 +44,7 @@ class DosenSessionController extends Controller
                 $jadwal = Jadwal::find($jadwalId);
 
                 if ($jadwal) {
-                    $currentDayNames = $this->dayNames($now);
-                    $jamSelesai = Carbon::parse($jadwal->jam_selesai);
-
-                    // Only auto-close if today is the scheduled day AND time has passed
-                    $isScheduledDay = in_array($jadwal->hari, $currentDayNames);
-                    $isPastEndTime = $now->gt($jamSelesai);
-
-                    if ($isScheduledDay && $isPastEndTime) {
+                    if ($this->isSessionCompleted($now->toDateString(), $jadwal)) {
                         Cache::forget('active_attendance_session');
                         $activeSession = null;
                     }
@@ -66,12 +60,7 @@ class DosenSessionController extends Controller
                     ->first();
 
                 if ($jadwal) {
-                    $currentDayNames = $this->dayNames($now);
-                    $jamSelesai = Carbon::parse($jadwal->jam_selesai);
-                    $isScheduledDay = in_array($jadwal->hari, $currentDayNames);
-                    $isPastEndTime = $now->gt($jamSelesai);
-
-                    if ($isScheduledDay && $isPastEndTime) {
+                    if ($this->isSessionCompleted($now->toDateString(), $jadwal)) {
                         Cache::forget('active_attendance_session');
                         $activeSession = null;
                     }
@@ -434,30 +423,7 @@ class DosenSessionController extends Controller
 
     private function dayNames(Carbon $date): array
     {
-        $dayMapId = [
-            1 => 'Senin',
-            2 => 'Selasa',
-            3 => 'Rabu',
-            4 => 'Kamis',
-            5 => 'Jumat',
-            6 => 'Sabtu',
-            7 => 'Minggu',
-        ];
-
-        $dayMapEn = [
-            1 => 'Monday',
-            2 => 'Tuesday',
-            3 => 'Wednesday',
-            4 => 'Thursday',
-            5 => 'Friday',
-            6 => 'Saturday',
-            7 => 'Sunday',
-        ];
-
-        return [
-            $dayMapId[$date->dayOfWeekIso],
-            $dayMapEn[$date->dayOfWeekIso],
-        ];
+        return $this->attendanceSessions()->dayNames($date);
     }
 
     private function normalizeDate(string $date): string
@@ -471,18 +437,12 @@ class DosenSessionController extends Controller
 
     private function isSessionCompleted(string $selectedDate, Jadwal $jadwal): bool
     {
-        $selectedDay = Carbon::parse($selectedDate)->startOfDay();
-        $today = now()->copy()->startOfDay();
-
-        if ($selectedDay->lt($today)) {
-            return true;
-        }
-
-        if ($selectedDay->gt($today)) {
-            return false;
-        }
-
-        return now()->format('H:i:s') > (string) $jadwal->jam_selesai;
+        return $this->attendanceSessions()->sessionPhase(
+            Carbon::parse($selectedDate),
+            (string) $jadwal->jam_mulai,
+            (string) $jadwal->jam_selesai,
+            now()
+        ) === 'completed';
     }
 
     private function assignedCourseIds(int $userId): array
@@ -511,5 +471,10 @@ class DosenSessionController extends Controller
         }
 
         return $time;
+    }
+
+    private function attendanceSessions(): AttendanceSessionService
+    {
+        return app(AttendanceSessionService::class);
     }
 }

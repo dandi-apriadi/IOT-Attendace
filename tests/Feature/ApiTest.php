@@ -13,6 +13,7 @@ use App\Models\Absensi;
 use App\Models\SemesterAkademik;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 
 class ApiTest extends TestCase
 {
@@ -345,6 +346,43 @@ class ApiTest extends TestCase
                          ->count();
 
         $this->assertEquals(1, $count);
+    }
+
+    public function test_manual_session_tidak_mencatat_mahasiswa_dari_kelas_lain()
+    {
+        $activeJadwal = Jadwal::firstOrFail();
+        $otherClass = Kelas::create(['nama_kelas' => 'TI-3B']);
+        $otherStudent = Mahasiswa::create([
+            'nim' => '20229988',
+            'nama' => 'Mahasiswa Kelas Lain',
+            'kelas_id' => $otherClass->id,
+            'rfid_uid' => 'RFID-OTHER-CLASS',
+        ]);
+
+        Cache::put('active_attendance_session', [
+            'mata_kuliah_id' => $activeJadwal->mata_kuliah_id,
+            'kelas_id' => $activeJadwal->kelas_id,
+            'jadwal_id' => $activeJadwal->id,
+            'started_at' => now()->toDateTimeString(),
+            'user_id' => null,
+            'source' => 'schedule',
+        ], now()->addHours(3));
+
+        $response = $this->postJson('/api/absensi', [
+            'identifier' => 'RFID-OTHER-CLASS',
+            'type' => 'RFID',
+        ], [
+            'X-Device-Token' => $this->deviceToken,
+            'X-Device-Id' => $this->deviceId,
+        ]);
+
+        $response->assertStatus(400)
+            ->assertJson(['message' => 'Tidak ada jadwal/sesi aktif saat ini']);
+
+        $this->assertDatabaseMissing('absensi', [
+            'mahasiswa_id' => $otherStudent->id,
+            'jadwal_id' => $activeJadwal->id,
+        ]);
     }
 
     public function test_live_monitoring_data_refreshes_after_existing_attendance_is_updated()
