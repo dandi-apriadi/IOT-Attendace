@@ -39,6 +39,9 @@ $config = [
     'device_token' => (string) env_val('DEVICE_TOKEN', ''),
     'device_ip' => (string) env_val('DEVICE_IP', '192.168.0.10'),
     'device_port' => (int) env_val('DEVICE_PORT', 4370),
+    'scan_subnet' => (string) env_val('SCAN_SUBNET', ''),
+    'scan_ips' => (string) env_val('SCAN_IPS', ''),
+    'scan_port' => (int) env_val('SCAN_PORT', 4370),
     'poll_limit' => (int) env_val('POLL_LIMIT', 5),
     'http_timeout' => (int) env_val('HTTP_TIMEOUT', 30),
 ];
@@ -101,6 +104,74 @@ function connect_device(string $ip, int $port): ?ZKTeco
         usleep(500000);
     }
     return null;
+}
+
+function scan_candidates(array $config): array
+{
+    if (trim($config['scan_ips']) !== '') {
+        return array_values(array_filter(array_map('trim', explode(',', $config['scan_ips']))));
+    }
+
+    $subnet = trim($config['scan_subnet']);
+    if ($subnet === '') {
+        $parts = explode('.', $config['device_ip']);
+        if (count($parts) === 4) {
+            $subnet = $parts[0] . '.' . $parts[1] . '.' . $parts[2] . '.0/24';
+        }
+    }
+
+    if (! preg_match('/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.0\/24$/', $subnet, $m)) {
+        return [$config['device_ip']];
+    }
+
+    $prefix = $m[1] . '.' . $m[2] . '.' . $m[3] . '.';
+    $ips = [];
+    for ($i = 1; $i <= 254; $i++) {
+        $ips[] = $prefix . $i;
+    }
+
+    return $ips;
+}
+
+function probe_zkteco(string $ip, int $port): ?array
+{
+    $zk = new ZKTeco($ip, $port);
+    if (! @$zk->connect()) {
+        return null;
+    }
+
+    try {
+        return [
+            'ip_address' => $ip,
+            'port' => $port,
+            'version' => clean_value((string) $zk->version()),
+            'serial_number' => clean_value((string) $zk->serialNumber()),
+            'device_name' => clean_value((string) $zk->deviceName()),
+            'platform' => clean_value((string) $zk->platform()),
+            'device_time' => clean_value((string) $zk->getTime()),
+        ];
+    } catch (\Throwable $e) {
+        return [
+            'ip_address' => $ip,
+            'port' => $port,
+            'error' => $e->getMessage(),
+        ];
+    } finally {
+        @$zk->disconnect();
+    }
+}
+
+function scan_zkteco_devices(array $config): array
+{
+    $found = [];
+    foreach (scan_candidates($config) as $ip) {
+        $info = probe_zkteco($ip, $config['scan_port']);
+        if ($info !== null) {
+            $found[] = $info;
+        }
+    }
+
+    return $found;
 }
 
 /**
@@ -188,6 +259,11 @@ function execute_command(ZKTeco $zk, string $type, array $payload): array
                     'device_name' => clean_value((string) $zk->deviceName()),
                     'platform' => clean_value((string) $zk->platform()),
                     'device_time' => clean_value((string) $zk->getTime()),
+                ], null];
+
+            case 'scan_devices':
+                return [true, [
+                    'devices' => scan_zkteco_devices($GLOBALS['config']),
                 ], null];
 
             case 'pull_users':

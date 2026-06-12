@@ -119,6 +119,7 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     // Perangkat IoT
     Route::get('/master/devices', [\App\Http\Controllers\DeviceController::class, 'index'])->name('devices.index');
     Route::post('/master/devices', [\App\Http\Controllers\DeviceController::class, 'store'])->name('devices.store');
+    Route::post('/master/devices/scan-agent', [\App\Http\Controllers\DeviceController::class, 'scanAgentDevices'])->name('devices.scan-agent');
     Route::get('/master/devices/{device}/edit', [\App\Http\Controllers\DeviceController::class, 'edit'])->name('devices.edit');
     Route::put('/master/devices/{device}', [\App\Http\Controllers\DeviceController::class, 'update'])->name('devices.update');
     Route::delete('/master/devices/{device}', [\App\Http\Controllers\DeviceController::class, 'destroy'])->name('devices.destroy');

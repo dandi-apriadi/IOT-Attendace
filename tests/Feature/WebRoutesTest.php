@@ -433,6 +433,82 @@ class WebRoutesTest extends TestCase
             ]);
     }
 
+    public function test_scan_agent_mendaftarkan_perangkat_zkteco_yang_ditemukan(): void
+    {
+        config(['agent.role' => 'server']);
+
+        $agentDevice = Device::create([
+            'device_id' => 'ZKTECO-X609-01',
+            'name' => 'ZKTeco X609 #1',
+            'type' => 'zkteco',
+            'ip_address' => '192.168.0.10',
+            'port' => 4370,
+            'token_hash' => hash('sha256', 'test-token'),
+            'is_active' => true,
+            'last_seen_at' => now(),
+        ]);
+
+        $this->actingAs($this->admin);
+
+        $queued = $this->postJson('/master/devices/scan-agent');
+        $queued->assertOk()
+            ->assertJson([
+                'ok' => true,
+                'queued' => true,
+            ])
+            ->assertJsonStructure(['command_id', 'status_url']);
+
+        $command = DeviceCommand::findOrFail($queued->json('command_id'));
+        $this->assertSame('scan_devices', $command->type);
+        $this->assertSame($agentDevice->id, $command->device_id);
+
+        $this->postJson("/api/agent/commands/{$command->id}/result", [
+            'success' => true,
+            'result' => [
+                'devices' => [
+                    [
+                        'ip_address' => '192.168.0.10',
+                        'port' => 4370,
+                        'serial_number' => 'SN-001',
+                        'device_name' => 'X609 Lab 1',
+                        'platform' => 'ZMM',
+                    ],
+                    [
+                        'ip_address' => '192.168.0.11',
+                        'port' => 4370,
+                        'serial_number' => 'SN-002',
+                        'device_name' => 'X609 Lab 2',
+                        'platform' => 'ZMM',
+                    ],
+                ],
+            ],
+        ], [
+            'X-Device-Id' => 'ZKTECO-X609-01',
+            'X-Device-Token' => 'test-token',
+        ])->assertOk()
+            ->assertJson(['status' => 'done']);
+
+        $this->assertDatabaseHas('devices', [
+            'device_id' => 'ZKTECO-X609-01',
+            'name' => 'X609 Lab 1',
+            'type' => 'zkteco',
+            'ip_address' => '192.168.0.10',
+            'port' => 4370,
+            'is_active' => true,
+        ]);
+
+        $this->assertDatabaseHas('devices', [
+            'device_id' => 'ZKTECO-SN-002',
+            'name' => 'X609 Lab 2',
+            'type' => 'zkteco',
+            'ip_address' => '192.168.0.11',
+            'port' => 4370,
+            'is_active' => true,
+        ]);
+
+        $this->assertSame(2, Device::where('type', 'zkteco')->count());
+    }
+
     public function test_update_device_tidak_bisa_mengubah_identitas_alat(): void
     {
         $device = Device::create([

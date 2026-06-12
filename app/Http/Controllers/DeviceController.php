@@ -151,6 +151,41 @@ class DeviceController extends Controller
 
     // ====================== ZKTeco Operations ======================
 
+    public function scanAgentDevices(Request $request): JsonResponse
+    {
+        if (! $this->usesAgentRelay()) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Scan via agent hanya aktif saat aplikasi berjalan dalam mode server/VPS.',
+            ], 422);
+        }
+
+        $agent = Device::query()
+            ->where('type', 'zkteco')
+            ->where('is_active', true)
+            ->whereNotNull('last_seen_at')
+            ->where('last_seen_at', '>=', now()->subMinutes(5))
+            ->orderByDesc('last_seen_at')
+            ->first();
+
+        if (! $agent) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Belum ada agent ZKTeco online. Jalankan agent lokal dulu, lalu scan ulang.',
+            ], 422);
+        }
+
+        $command = app(DeviceCommandService::class)->enqueue($agent, 'scan_devices', [
+            'requested_from' => 'master/devices',
+        ], $request->user()?->id);
+
+        return $this->queuedCommandResponse(
+            $agent,
+            $command,
+            'Perintah scan perangkat dikirim ke agent ' . ($agent->name ?: $agent->device_id) . '. Menunggu hasil scan jaringan lokal.'
+        );
+    }
+
     /**
      * Tes koneksi ke perangkat (dipanggil via fetch dari UI).
      */
@@ -667,6 +702,7 @@ class DeviceController extends Controller
             'pull_biometrics' => 'Tarik biometrik selesai. Data yang cocok sudah diperbarui di sistem.',
             'clear_attendance' => ! empty($result['cleared']) ? 'Log absensi perangkat berhasil dikosongkan.' : 'Perintah kosongkan log selesai.',
             'sync_time' => 'Waktu perangkat berhasil disinkronkan' . (! empty($result['device_time']) ? ': ' . $result['device_time'] : '.') ,
+            'scan_devices' => 'Scan selesai. Ditemukan ' . count((array) ($result['devices'] ?? [])) . ' perangkat ZKTeco.',
             default => 'Perintah selesai dijalankan agent.',
         };
     }

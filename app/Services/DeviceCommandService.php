@@ -6,6 +6,7 @@ use App\Models\Device;
 use App\Models\DeviceCommand;
 use App\Models\Mahasiswa;
 use App\Services\ZktecoService;
+use Illuminate\Support\Str;
 
 /**
  * Mengelola antrean perintah (DeviceCommand) dari SERVER (VPS) menuju AGENT
@@ -91,10 +92,66 @@ class DeviceCommandService
     public function applyResult(DeviceCommand $command, array $result): void
     {
         match ($command->type) {
+            'scan_devices' => $this->applyScanDevicesResult($command, $result),
             'read_user' => $this->applyReadUserResult($command, $result),
             'pull_biometrics' => $this->applyBiometricsResult($command, $result),
             default => null,
         };
+    }
+
+    /**
+     * Mendaftarkan atau memperbarui perangkat ZKTeco yang ditemukan agent.
+     *
+     * @param array<string, mixed> $result
+     */
+    private function applyScanDevicesResult(DeviceCommand $command, array $result): void
+    {
+        $devices = $result['devices'] ?? null;
+        if (! is_array($devices)) {
+            return;
+        }
+
+        foreach ($devices as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            $ip = trim((string) ($row['ip_address'] ?? $row['ip'] ?? ''));
+            if ($ip === '') {
+                continue;
+            }
+
+            $port = (int) ($row['port'] ?? 4370);
+            $serial = trim((string) ($row['serial_number'] ?? ''));
+            $deviceId = $serial !== ''
+                ? 'ZKTECO-' . strtoupper(Str::slug($serial, '-'))
+                : 'ZKTECO-' . str_replace(['.', ':'], '-', $ip) . '-' . $port;
+
+            $device = Device::query()->where('device_id', $deviceId)->first()
+                ?: Device::query()
+                    ->where('type', 'zkteco')
+                    ->where('ip_address', $ip)
+                    ->where('port', $port)
+                    ->first();
+
+            if (! $device) {
+                $device = new Device([
+                    'device_id' => $deviceId,
+                    'token_hash' => hash('sha256', Str::random(40)),
+                ]);
+            }
+
+            $deviceName = trim((string) ($row['device_name'] ?? ''));
+            $device->fill([
+                'name' => $deviceName !== '' ? $deviceName : ($device->name ?: 'ZKTeco ' . $ip),
+                'type' => 'zkteco',
+                'ip_address' => $ip,
+                'port' => $port,
+                'is_active' => true,
+                'last_seen_at' => now(),
+            ]);
+            $device->save();
+        }
     }
 
     /**

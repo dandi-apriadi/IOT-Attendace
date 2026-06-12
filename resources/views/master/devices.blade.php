@@ -28,7 +28,14 @@
 
     <!-- Add Device Form -->
     <div class="glass-card" style="background: #f8fafc; padding: 1.25rem; margin-bottom: 2rem;">
-        <h4 class="display-font" style="font-size: 0.9rem; margin-bottom: 1rem; color: var(--text-muted); text-transform: uppercase;">Tambah Perangkat Baru</h4>
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem; margin-bottom:1rem; flex-wrap:wrap;">
+            <h4 class="display-font" style="font-size: 0.9rem; color: var(--text-muted); text-transform: uppercase; margin:0;">Tambah Perangkat Baru</h4>
+            @if (config('agent.role') === 'server')
+                <button type="button" onclick="zkScanAgent()" class="zk-btn" style="background:#e0f2fe; color:#0369a1; padding:0.55rem 0.8rem;">
+                    <i class="fas fa-search"></i> Scan dari Agent
+                </button>
+            @endif
+        </div>
         <form action="{{ route('devices.store') }}" method="POST" style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
             @csrf
             <input name="device_id" type="text" placeholder="Device ID (ex: DEV-01)" class="form-control" style="flex: 1; min-width: 150px;" required>
@@ -48,6 +55,9 @@
 
             <button class="btn-kinetic" type="submit"><i class="fas fa-plus"></i> Simpan</button>
         </form>
+        @if (config('agent.role') === 'server')
+            <div id="zk-result-scan" style="display:none; margin-top:0.9rem; font-size:0.75rem; background:#f8fafc; border:1px solid #dbeafe; border-radius:8px; padding:0.75rem; font-family:monospace; white-space:pre-wrap; color:#334155;"></div>
+        @endif
     </div>
 
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;">
@@ -174,6 +184,21 @@
             ].join('\n');
         }
 
+        if (data.type === 'scan_devices' && Array.isArray(result.devices)) {
+            if (!result.devices.length) {
+                return 'Tidak ada perangkat ZKTeco yang ditemukan oleh agent.';
+            }
+
+            return result.devices.map((device, index) => {
+                return [
+                    (index + 1) + '. ' + (device.device_name || 'ZKTeco') + ' — ' + (device.ip_address || '-') + ':' + (device.port || 4370),
+                    '   Serial   : ' + (device.serial_number || '-'),
+                    '   Platform : ' + (device.platform || '-'),
+                    '   Waktu    : ' + (device.device_time || '-'),
+                ].join('\n');
+            }).join('\n\n');
+        }
+
         if (!result || !Object.keys(result).length) {
             return '';
         }
@@ -269,6 +294,15 @@
             }
         } catch (e) {
             zkShow(id, '❌ Gagal: ' + e.message, true);
+        }
+    }
+
+    async function zkScanAgent() {
+        zkShow('scan', 'Mengirim perintah scan perangkat ke agent...', false);
+        try {
+            await zkQueueRequest('scan', '{{ route('devices.scan-agent') }}', { method: 'POST' });
+        } catch (e) {
+            zkShow('scan', '❌ Gagal: ' + e.message, true);
         }
     }
 
