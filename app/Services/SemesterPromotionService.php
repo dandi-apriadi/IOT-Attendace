@@ -51,9 +51,9 @@ class SemesterPromotionService
         return new SemesterPromotionResult($eligible, $blocked);
     }
 
-    public function execute(?string $note = null, ?int $kelasId = null): SemesterPromotionResult
+    public function execute(?string $note = null, ?int $kelasId = null, string $mode = 'execute'): SemesterPromotionResult
     {
-        return DB::transaction(function () use ($note, $kelasId): SemesterPromotionResult {
+        return DB::transaction(function () use ($note, $kelasId, $mode): SemesterPromotionResult {
             $preview = $this->preview($kelasId);
             $promoted = 0;
             $promotedAt = now();
@@ -78,7 +78,7 @@ class SemesterPromotionService
                     'to_kelas_id' => $targetKelas->id,
                     'from_semester_level' => $fromSemesterLevel,
                     'to_semester_level' => $toSemesterLevel,
-                    'mode' => 'execute',
+                    'mode' => $mode,
                     'note' => $note,
                     'promoted_at' => $promotedAt,
                 ]);

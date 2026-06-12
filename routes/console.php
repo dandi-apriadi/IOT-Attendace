@@ -16,7 +16,7 @@ Schedule::command('zkteco:pull')
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/zkteco-pull.log'));
 
-Schedule::command('students:promote-semester')
+Schedule::command('students:promote-semester --execute --due-only')
     ->dailyAt('00:30')
     ->withoutOverlapping()
-    ->appendOutputTo(storage_path('logs/student-semester-promotion-preview.log'));
+    ->appendOutputTo(storage_path('logs/student-semester-promotion-auto.log'));

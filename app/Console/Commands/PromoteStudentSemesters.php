@@ -2,6 +2,8 @@
 
 namespace App\Console\Commands;
 
+use App\Models\SemesterAkademik;
+use App\Models\StudentSemesterPromotion;
 use App\Services\SemesterPromotionService;
 use Illuminate\Console\Command;
 
@@ -9,6 +11,7 @@ class PromoteStudentSemesters extends Command
 {
     protected $signature = 'students:promote-semester
         {--execute : Terapkan kenaikan semester. Tanpa flag ini hanya preview}
+        {--due-only : Eksekusi otomatis hanya saat semester aktif sudah mencapai tanggal selesai}
         {--kelas= : Batasi ke ID kelas tertentu}
         {--note= : Catatan yang disimpan pada histori promosi}';
 
@@ -18,10 +21,44 @@ class PromoteStudentSemesters extends Command
     {
         $kelasId = $this->option('kelas') !== null ? (int) $this->option('kelas') : null;
         $execute = (bool) $this->option('execute');
+        $dueOnly = (bool) $this->option('due-only');
         $note = $this->option('note') !== null ? (string) $this->option('note') : null;
+        $mode = 'execute';
+
+        if ($dueOnly) {
+            $activeSemester = SemesterAkademik::query()
+                ->where('is_active', true)
+                ->orderByDesc('tanggal_mulai')
+                ->first();
+
+            if (! $activeSemester) {
+                $this->warn('Belum ada semester aktif untuk kenaikan semester otomatis.');
+                return self::SUCCESS;
+            }
+
+            $dueDate = $activeSemester->tanggal_selesai?->copy()->startOfDay();
+            if (! $dueDate || now()->copy()->startOfDay()->lt($dueDate)) {
+                $this->info('Belum waktunya kenaikan semester otomatis. Semester aktif selesai pada ' . ($activeSemester->tanggal_selesai?->toDateString() ?? '-'));
+                return self::SUCCESS;
+            }
+
+            $alreadyExecuted = StudentSemesterPromotion::query()
+                ->where('mode', 'auto')
+                ->where('promoted_at', '>=', $dueDate)
+                ->exists();
+
+            if ($alreadyExecuted) {
+                $this->info('Kenaikan semester otomatis sudah pernah dijalankan untuk semester aktif ini.');
+                return self::SUCCESS;
+            }
+
+            $execute = true;
+            $mode = 'auto';
+            $note ??= 'Kenaikan semester otomatis setelah ' . $activeSemester->display_name;
+        }
 
         $result = $execute
-            ? $service->execute($note, $kelasId)
+            ? $service->execute($note, $kelasId, $mode)
             : $service->preview($kelasId);
 
         $this->info('Mode: ' . ($execute ? 'execute' : 'preview'));

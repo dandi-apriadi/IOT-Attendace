@@ -4,14 +4,23 @@ namespace Tests\Feature;
 
 use App\Models\Kelas;
 use App\Models\Mahasiswa;
+use App\Models\SemesterAkademik;
 use App\Models\User;
 use App\Services\SemesterPromotionService;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class SemesterPromotionServiceTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+
+        parent::tearDown();
+    }
 
     public function test_dry_run_lists_active_students_with_next_class_without_changing_database(): void
     {
@@ -167,6 +176,82 @@ class SemesterPromotionServiceTest extends TestCase
         ]);
     }
 
+    public function test_scheduler_runs_semester_promotion_in_execute_mode(): void
+    {
+        $this->artisan('schedule:list')
+            ->expectsOutputToContain('students:promote-semester --execute --due-only')
+            ->assertExitCode(0);
+    }
+
+    public function test_due_only_command_skips_before_active_semester_end_date(): void
+    {
+        Carbon::setTestNow('2026-06-12 00:31:00');
+        [$kelasSatu, $kelasDua] = $this->makePromotionClasses();
+        $this->makeActiveSemester('2026-02-01', '2026-06-30');
+
+        $student = Mahasiswa::create([
+            'nim' => '23022010',
+            'nama' => 'Belum Waktunya',
+            'kelas_id' => $kelasSatu->id,
+            'semester_level' => 1,
+            'status_akademik' => 'aktif',
+        ]);
+
+        $this->artisan('students:promote-semester', ['--execute' => true, '--due-only' => true])
+            ->expectsOutputToContain('Belum waktunya kenaikan semester otomatis')
+            ->assertExitCode(0);
+
+        $this->assertDatabaseHas('mahasiswa', [
+            'id' => $student->id,
+            'kelas_id' => $kelasSatu->id,
+            'semester_level' => 1,
+        ]);
+        $this->assertDatabaseMissing('mahasiswa', [
+            'id' => $student->id,
+            'kelas_id' => $kelasDua->id,
+        ]);
+    }
+
+    public function test_due_only_command_does_not_repeat_for_same_active_semester(): void
+    {
+        Carbon::setTestNow('2026-06-30 00:31:00');
+        [$kelasSatu, $kelasDua] = $this->makePromotionClasses();
+        $kelasTiga = Kelas::create([
+            'nama_kelas' => 'TI-3A',
+            'semester_level' => 3,
+        ]);
+        $kelasDua->update(['next_kelas_id' => $kelasTiga->id]);
+        $this->makeActiveSemester('2026-02-01', '2026-06-30');
+
+        $student = Mahasiswa::create([
+            'nim' => '23022011',
+            'nama' => 'Sekali Naik',
+            'kelas_id' => $kelasSatu->id,
+            'semester_level' => 1,
+            'status_akademik' => 'aktif',
+        ]);
+
+        $this->artisan('students:promote-semester', ['--execute' => true, '--due-only' => true])
+            ->expectsOutputToContain('Dipromosikan: 1')
+            ->assertExitCode(0);
+
+        Carbon::setTestNow('2026-07-01 00:31:00');
+
+        $this->artisan('students:promote-semester', ['--execute' => true, '--due-only' => true])
+            ->expectsOutputToContain('Kenaikan semester otomatis sudah pernah dijalankan')
+            ->assertExitCode(0);
+
+        $this->assertDatabaseHas('mahasiswa', [
+            'id' => $student->id,
+            'kelas_id' => $kelasDua->id,
+            'semester_level' => 2,
+        ]);
+        $this->assertDatabaseMissing('mahasiswa', [
+            'id' => $student->id,
+            'kelas_id' => $kelasTiga->id,
+        ]);
+    }
+
     public function test_execute_is_idempotent_for_students_promoted_today(): void
     {
         [$kelasSatu, $kelasDua] = $this->makePromotionClasses();
@@ -273,5 +358,16 @@ class SemesterPromotionServiceTest extends TestCase
         $kelasSatu->update(['next_kelas_id' => $kelasDua->id]);
 
         return [$kelasSatu->fresh(), $kelasDua];
+    }
+
+    private function makeActiveSemester(string $startDate, string $endDate): SemesterAkademik
+    {
+        return SemesterAkademik::create([
+            'nama_semester' => 'Semester Genap',
+            'tahun_ajaran' => '2025/2026',
+            'tanggal_mulai' => $startDate,
+            'tanggal_selesai' => $endDate,
+            'is_active' => true,
+        ]);
     }
 }
