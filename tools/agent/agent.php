@@ -229,9 +229,20 @@ function push_attendance(Client $http, ZKTeco $zk): void
  *
  * @return array{0: bool, 1: array<string,mixed>|null, 2: ?string}
  */
-function execute_command(ZKTeco $zk, string $type, array $payload): array
+function execute_command(?ZKTeco $zk, string $type, array $payload): array
 {
     try {
+        switch ($type) {
+            case 'scan_devices':
+                return [true, [
+                    'devices' => scan_zkteco_devices($GLOBALS['config']),
+                ], null];
+        }
+
+        if (! $zk) {
+            return [false, null, 'Agent tidak bisa terhubung ke alat lokal. Periksa IP/port dan jaringan alat.'];
+        }
+
         switch ($type) {
             case 'push_all_users':
             case 'push_user':
@@ -276,11 +287,6 @@ function execute_command(ZKTeco $zk, string $type, array $payload): array
                     'device_name' => clean_value((string) $zk->deviceName()),
                     'platform' => clean_value((string) $zk->platform()),
                     'device_time' => clean_value((string) $zk->getTime()),
-                ], null];
-
-            case 'scan_devices':
-                return [true, [
-                    'devices' => scan_zkteco_devices($GLOBALS['config']),
                 ], null];
 
             case 'pull_users':
@@ -401,7 +407,7 @@ function encode_fingerprint_payload($payload): array
 /**
  * Memproses antrean perintah hingga kosong atau mencapai batas.
  */
-function process_commands(Client $http, ZKTeco $zk, int $limit): void
+function process_commands(Client $http, ?ZKTeco $zk, int $limit): void
 {
     for ($i = 0; $i < $limit; $i++) {
         $res = $http->get('api/agent/commands/next');
@@ -445,14 +451,18 @@ function run_cycle(Client $http, array $config): void
     $zk = connect_device($config['device_ip'], $config['device_port']);
     if (! $zk) {
         logline("[ERROR] Tidak bisa terhubung ke alat {$config['device_ip']}:{$config['device_port']}.");
-        return;
     }
 
     try {
-        push_attendance($http, $zk);
+        if ($zk) {
+            push_attendance($http, $zk);
+        }
+
         process_commands($http, $zk, $config['poll_limit']);
     } finally {
-        @$zk->disconnect();
+        if ($zk) {
+            @$zk->disconnect();
+        }
     }
 }
 
