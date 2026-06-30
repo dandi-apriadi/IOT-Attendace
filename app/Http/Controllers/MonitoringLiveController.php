@@ -22,39 +22,35 @@ class MonitoringLiveController extends Controller
         $selectedKelasId = $request->query('kelas_id');
         $payload = $this->buildLivePayload($selectedDate, $selectedJadwalId, $selectedKelasId);
 
-        // Get active attendance session from cache
-        $activeSessions = $this->attendanceSessions()->activeSessions();
-        $activeSession = collect($activeSessions)
-            ->when($selectedJadwalId, fn ($sessions) => $sessions->filter(
-                fn ($session) => (int) ($session['jadwal_id'] ?? 0) === (int) $selectedJadwalId
-            ))
-            ->first() ?: collect($activeSessions)->first();
-        $activeSessionInfo = null;
+        // Resolve ALL active sessions from cache into enriched info arrays.
+        $rawActiveSessions = $this->attendanceSessions()->activeSessions();
+        $activeSessionsInfo = [];
 
-        if ($activeSession) {
+        foreach ($rawActiveSessions as $rawSession) {
             $jadwalQuery = Jadwal::query()
                 ->with(['mata_kuliah:id,kode_mk,nama_mk', 'kelas:id,nama_kelas'])
-                ->where('mata_kuliah_id', $activeSession['mata_kuliah_id'])
-                ->where('kelas_id', $activeSession['kelas_id']);
+                ->where('mata_kuliah_id', $rawSession['mata_kuliah_id'] ?? null)
+                ->where('kelas_id', $rawSession['kelas_id'] ?? null);
 
-            if (! empty($activeSession['jadwal_id'])) {
-                $jadwalQuery->whereKey((int) $activeSession['jadwal_id']);
+            if (! empty($rawSession['jadwal_id'])) {
+                $jadwalQuery->whereKey((int) $rawSession['jadwal_id']);
             }
 
             $jadwal = $jadwalQuery->first();
-
-            if ($jadwal) {
-                $activeSessionInfo = [
-                    'mata_kuliah_id' => $jadwal->mata_kuliah_id,
-                    'kelas_id' => $jadwal->kelas_id,
-                    'mk_name' => $jadwal->mata_kuliah?->nama_mk ?? 'N/A',
-                    'mk_kode' => $jadwal->mata_kuliah?->kode_mk ?? 'N/A',
-                    'kelas_name' => $jadwal->kelas?->nama_kelas ?? 'N/A',
-                    'source' => ($activeSession['source'] ?? 'manual') === 'auto_schedule' ? 'AUTO' : 'MANUAL',
-                    'started_at' => $activeSession['started_at'] ?? null,
-                    'jadwal_id' => $jadwal->id,
-                ];
+            if (! $jadwal) {
+                continue;
             }
+
+            $activeSessionsInfo[] = [
+                'mata_kuliah_id' => $jadwal->mata_kuliah_id,
+                'kelas_id' => $jadwal->kelas_id,
+                'mk_name' => $jadwal->mata_kuliah?->nama_mk ?? 'N/A',
+                'mk_kode' => $jadwal->mata_kuliah?->kode_mk ?? 'N/A',
+                'kelas_name' => $jadwal->kelas?->nama_kelas ?? 'N/A',
+                'source' => ($rawSession['source'] ?? 'manual') === 'auto_schedule' ? 'AUTO' : 'MANUAL',
+                'started_at' => $rawSession['started_at'] ?? null,
+                'jadwal_id' => $jadwal->id,
+            ];
         }
 
         return view('monitoring.live', [
@@ -68,7 +64,7 @@ class MonitoringLiveController extends Controller
             'sessions' => $payload['sessions'],
             'sessionSummary' => $payload['session_summary'],
             'selectedSession' => $payload['selected_session'],
-            'activeSession' => $activeSessionInfo,
+            'activeSessions' => $activeSessionsInfo,
             'kelases' => $payload['kelases'],
             'jadwalList' => $payload['jadwal_list'],
         ]);
