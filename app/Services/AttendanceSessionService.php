@@ -12,6 +12,7 @@ class AttendanceSessionService
     public const GRACE_PERIOD_MINUTES = 15;
     public const ACTIVE_SESSIONS_CACHE_KEY = 'active_attendance_sessions';
     public const LEGACY_ACTIVE_SESSION_CACHE_KEY = 'active_attendance_session';
+    public const FORCE_CLOSED_CACHE_KEY = 'force_closed_attendance_jadwal_ids';
 
     /**
      * @return array{jadwal: Jadwal, baseline_time: mixed}|null
@@ -192,6 +193,12 @@ class AttendanceSessionService
     public function forgetActiveSession(?int $jadwalId = null, ?int $mataKuliahId = null, ?int $kelasId = null): void
     {
         if ($jadwalId === null && $mataKuliahId === null && $kelasId === null) {
+            // Close all: mark every active jadwal as force-closed so auto-open skips them.
+            foreach ($this->activeSessions() as $session) {
+                if (! empty($session['jadwal_id'])) {
+                    $this->markForceClosed((int) $session['jadwal_id']);
+                }
+            }
             Cache::forget(self::ACTIVE_SESSIONS_CACHE_KEY);
             Cache::forget(self::LEGACY_ACTIVE_SESSION_CACHE_KEY);
 
@@ -208,12 +215,35 @@ class AttendanceSessionService
                 && (int) ($session['kelas_id'] ?? 0) === $kelasId;
 
             if ($matchesJadwal || $matchesCourseClass) {
+                if (! empty($session['jadwal_id'])) {
+                    $this->markForceClosed((int) $session['jadwal_id']);
+                }
                 unset($sessions[$key]);
             }
         }
 
         Cache::put(self::ACTIVE_SESSIONS_CACHE_KEY, $sessions, now()->addHours(3));
         Cache::forget(self::LEGACY_ACTIVE_SESSION_CACHE_KEY);
+    }
+
+    public function isForceClosedSession(int $jadwalId): bool
+    {
+        $closed = Cache::get(self::FORCE_CLOSED_CACHE_KEY, []);
+
+        return in_array($jadwalId, is_array($closed) ? $closed : [], true);
+    }
+
+    private function markForceClosed(int $jadwalId): void
+    {
+        $closed = Cache::get(self::FORCE_CLOSED_CACHE_KEY, []);
+        $closed = is_array($closed) ? $closed : [];
+
+        if (! in_array($jadwalId, $closed, true)) {
+            $closed[] = $jadwalId;
+        }
+
+        // Keep until end of the current calendar day so force-close survives page reloads.
+        Cache::put(self::FORCE_CLOSED_CACHE_KEY, $closed, now()->endOfDay());
     }
 
     public function livePayloadCacheKey(string $date, mixed $jadwalId): string

@@ -86,6 +86,11 @@ class DosenSessionController extends Controller
             ->orderBy('jam_mulai')
             ->get()
             ->each(function (Jadwal $autoOpenJadwal) use ($attendanceSessions, $user): void {
+                // Skip jadwal that were manually force-closed this session day.
+                if ($attendanceSessions->isForceClosedSession((int) $autoOpenJadwal->id)) {
+                    return;
+                }
+
                 $attendanceSessions->putActiveSession([
                     'mata_kuliah_id' => $autoOpenJadwal->mata_kuliah_id,
                     'kelas_id' => $autoOpenJadwal->kelas_id,
