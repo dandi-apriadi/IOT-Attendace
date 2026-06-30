@@ -37,4 +37,17 @@ return [
 
     'command_dispatch_ttl' => (int) env('AGENT_COMMAND_TTL', 300),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Maksimum Retry Dispatch Command
+    |--------------------------------------------------------------------------
+    |
+    | Jika agent mengambil command tetapi tidak pernah mengirim result, command
+    | lama tidak boleh terus memblokir command baru. Setelah batas ini tercapai,
+    | command akan ditandai failed agar antrean perangkat bisa lanjut.
+    |
+    */
+
+    'command_max_dispatch_attempts' => (int) env('AGENT_COMMAND_MAX_ATTEMPTS', 3),
+
 ];

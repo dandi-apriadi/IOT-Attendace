@@ -64,13 +64,33 @@ class AgentBridgeController extends Controller
             return response()->json(['message' => 'Perangkat tidak terautentikasi.'], 401);
         }
 
-        // Kembalikan command 'dispatched' yang sudah kedaluwarsa ke antrean.
+        // Command yang diambil agent tetapi tidak dilaporkan kembali tidak boleh
+        // memblokir antrean selamanya.
         $ttl = (int) config('agent.command_dispatch_ttl', 300);
-        DeviceCommand::query()
+        $maxAttempts = max(1, (int) config('agent.command_max_dispatch_attempts', 3));
+
+        $expiredDispatched = DeviceCommand::query()
             ->where('device_id', $device->id)
             ->where('status', 'dispatched')
             ->where('dispatched_at', '<', now()->subSeconds($ttl))
-            ->update(['status' => 'queued', 'dispatched_at' => null]);
+            ->get();
+
+        foreach ($expiredDispatched as $expired) {
+            if ((int) $expired->dispatch_attempts >= $maxAttempts) {
+                $expired->forceFill([
+                    'status' => 'failed',
+                    'error' => 'Agent mengambil perintah tetapi tidak mengirim hasil sampai batas retry tercapai.',
+                    'completed_at' => now(),
+                ])->save();
+
+                continue;
+            }
+
+            $expired->forceFill([
+                'status' => 'queued',
+                'dispatched_at' => null,
+            ])->save();
+        }
 
         $command = DeviceCommand::query()
             ->where('device_id', $device->id)
@@ -84,6 +104,7 @@ class AgentBridgeController extends Controller
 
         $command->forceFill([
             'status' => 'dispatched',
+            'dispatch_attempts' => ((int) $command->dispatch_attempts) + 1,
             'dispatched_at' => now(),
         ])->save();
 

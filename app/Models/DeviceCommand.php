@@ -17,6 +17,7 @@ class DeviceCommand extends Model
         'type',
         'payload',
         'status',
+        'dispatch_attempts',
         'result',
         'error',
         'requested_by',
@@ -27,6 +28,7 @@ class DeviceCommand extends Model
     protected $casts = [
         'payload' => 'array',
         'result' => 'array',
+        'dispatch_attempts' => 'integer',
         'dispatched_at' => 'datetime',
         'completed_at' => 'datetime',
     ];

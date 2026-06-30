@@ -206,6 +206,51 @@ class DeviceManagementAgentTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_agent_poll_marks_expired_command_failed_after_retry_limit(): void
+    {
+        config([
+            'agent.command_dispatch_ttl' => 60,
+            'agent.command_max_dispatch_attempts' => 2,
+        ]);
+
+        $device = $this->createDevice([
+            'device_id' => 'ZKTECO-X609-01',
+            'token_hash' => hash('sha256', 'test-token'),
+        ]);
+
+        $stale = DeviceCommand::create([
+            'device_id' => $device->id,
+            'type' => 'pull_biometrics',
+            'status' => 'dispatched',
+            'dispatch_attempts' => 2,
+            'dispatched_at' => now()->subMinutes(5),
+        ]);
+
+        $next = DeviceCommand::create([
+            'device_id' => $device->id,
+            'type' => 'scan_devices',
+            'status' => 'queued',
+        ]);
+
+        $this->getJson('/api/agent/commands/next', [
+            'X-Device-Id' => 'ZKTECO-X609-01',
+            'X-Device-Token' => 'test-token',
+        ])->assertOk()
+            ->assertJsonPath('status', 'command')
+            ->assertJsonPath('command.id', $next->id);
+
+        $this->assertDatabaseHas('device_commands', [
+            'id' => $stale->id,
+            'status' => 'failed',
+        ]);
+
+        $this->assertDatabaseHas('device_commands', [
+            'id' => $next->id,
+            'status' => 'dispatched',
+            'dispatch_attempts' => 1,
+        ]);
+    }
+
     public function test_devices_page_has_one_context_aware_scan_action(): void
     {
         $this->createDevice(['last_seen_at' => now()]);
