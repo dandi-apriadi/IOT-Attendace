@@ -436,9 +436,16 @@ class ZktecoService
             }
 
             $hasFingerprint = $fingerprintResolver ? (bool) $fingerprintResolver($uid) : false;
-            if ($hasFingerprint && (string) $mahasiswa->fingerprint_data !== $fingerprintMarker) {
-                $updates['fingerprint_data'] = $fingerprintMarker;
-                $result['fingerprint_updated']++;
+            if ($hasFingerprint) {
+                $fingerprintPayload = $this->normalizeStoredFingerprintPayload($user['fingerprint_data'] ?? null);
+                $storedFingerprint = $fingerprintPayload !== []
+                    ? json_encode($fingerprintPayload, JSON_UNESCAPED_SLASHES)
+                    : $fingerprintMarker;
+
+                if ((string) $mahasiswa->fingerprint_data !== (string) $storedFingerprint) {
+                    $updates['fingerprint_data'] = $storedFingerprint;
+                    $result['fingerprint_updated']++;
+                }
             }
 
             if ($updates !== []) {
@@ -788,6 +795,27 @@ class ZktecoService
         }
 
         return $decoded;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function normalizeStoredFingerprintPayload(mixed $payload): array
+    {
+        if (! is_array($payload)) {
+            return [];
+        }
+
+        $normalized = [];
+        foreach ($payload as $fingerId => $template) {
+            if (! is_string($template) || $template === '') {
+                continue;
+            }
+
+            $normalized[(string) $fingerId] = $template;
+        }
+
+        return $normalized;
     }
 
     /**

@@ -163,6 +163,85 @@ class ZktecoBiometricSyncTest extends TestCase
         }
     }
 
+    public function test_agent_pull_biometrics_propagates_student_fingerprint_to_all_active_zkteco_devices(): void
+    {
+        $kelas = Kelas::create(['nama_kelas' => 'TI-3A']);
+        $mahasiswa = Mahasiswa::create([
+            'nim' => '20220011',
+            'nama' => 'Mhs Finger Semua',
+            'kelas_id' => $kelas->id,
+        ]);
+        $sourceDevice = Device::create([
+            'device_id' => 'ZK_STUDENT_SOURCE',
+            'name' => 'ZKTeco Student Source',
+            'type' => 'zkteco',
+            'ip_address' => '192.168.0.40',
+            'port' => 4370,
+            'token_hash' => hash('sha256', 'source-token'),
+            'is_active' => true,
+        ]);
+        $otherRoom = Device::create([
+            'device_id' => 'ZK_STUDENT_ROOM_2',
+            'name' => 'ZKTeco Student Room 2',
+            'type' => 'zkteco',
+            'ip_address' => '192.168.0.41',
+            'port' => 4370,
+            'token_hash' => hash('sha256', 'room-token'),
+            'is_active' => true,
+        ]);
+        Device::create([
+            'device_id' => 'ZK_STUDENT_INACTIVE',
+            'name' => 'ZKTeco Student Inactive',
+            'type' => 'zkteco',
+            'ip_address' => '192.168.0.42',
+            'port' => 4370,
+            'token_hash' => hash('sha256', 'inactive-token'),
+            'is_active' => false,
+        ]);
+        $command = DeviceCommand::create([
+            'device_id' => $sourceDevice->id,
+            'type' => 'pull_biometrics',
+            'status' => 'queued',
+        ]);
+
+        app(DeviceCommandService::class)->applyResult($command, [
+            'users' => [[
+                'uid' => $mahasiswa->id,
+                'userid' => $mahasiswa->nim,
+                'cardno' => '',
+                'has_fingerprint' => true,
+                'fingerprint_data' => ['0' => 'student-template-all-rooms'],
+            ]],
+        ]);
+
+        $this->assertSame(
+            ['0' => 'student-template-all-rooms'],
+            json_decode((string) $mahasiswa->fresh()->fingerprint_data, true)
+        );
+
+        $syncCommands = DeviceCommand::query()
+            ->where('type', 'push_all_users')
+            ->where('status', 'queued')
+            ->orderBy('device_id')
+            ->get();
+
+        $this->assertCount(2, $syncCommands);
+        $this->assertEqualsCanonicalizing(
+            [$sourceDevice->id, $otherRoom->id],
+            $syncCommands->pluck('device_id')->all()
+        );
+
+        foreach ($syncCommands as $syncCommand) {
+            $this->assertContains([
+                'uid' => $mahasiswa->id,
+                'userid' => $mahasiswa->nim,
+                'name' => 'Mhs Finger Semua',
+                'kind' => 'mahasiswa',
+                'fingerprint_data' => ['0' => 'student-template-all-rooms'],
+            ], $syncCommand->payload['users']);
+        }
+    }
+
     public function test_sync_registered_student_biometrics_updates_existing_students_only(): void
     {
         $kelas = Kelas::create(['nama_kelas' => 'TI-3A']);

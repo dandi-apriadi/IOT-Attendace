@@ -43,7 +43,7 @@ class DeviceCommandService
         $users = [];
 
         Mahasiswa::query()
-            ->select(['id', 'nim', 'nama'])
+            ->select(['id', 'nim', 'nama', 'fingerprint_data'])
             ->orderBy('id')
             ->chunk(500, function ($mahasiswas) use (&$users): void {
                 foreach ($mahasiswas as $m) {
@@ -79,16 +79,23 @@ class DeviceCommandService
     }
 
     /**
-     * @return array{uid: int, userid: string, name: string, kind: string}
+     * @return array<string, mixed>
      */
     private function mapMahasiswaUser(Mahasiswa $m): array
     {
-        return [
+        $row = [
             'uid' => (int) $m->id,
             'userid' => (string) $m->nim,
             'name' => mb_substr((string) $m->nama, 0, 24),
             'kind' => 'mahasiswa',
         ];
+
+        $fingerprintData = $this->decodeStoredFingerprintPayload($m->fingerprint_data);
+        if ($fingerprintData !== []) {
+            $row['fingerprint_data'] = $fingerprintData;
+        }
+
+        return $row;
     }
 
     /**
@@ -204,14 +211,14 @@ class DeviceCommandService
             $fingerprintFlags[(int) ($u['uid'] ?? 0)] = ! empty($u['has_fingerprint']);
         }
 
-        (new ZktecoService($command->device))->syncRegisteredStudentBiometricsFromUsers(
+        $studentResult = (new ZktecoService($command->device))->syncRegisteredStudentBiometricsFromUsers(
             $users,
             fn (int $uid): bool => $fingerprintFlags[$uid] ?? false
         );
 
         $dosenUpdated = $this->applyDosenBiometricsFromUsers($users);
 
-        if ($dosenUpdated > 0) {
+        if ((int) ($studentResult['fingerprint_updated'] ?? 0) > 0 || $dosenUpdated > 0) {
             $this->enqueueAllActiveZktecoUserSyncs($command->requested_by);
         }
     }
@@ -268,6 +275,27 @@ class DeviceCommandService
             });
 
         return $queued;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function decodeStoredFingerprintPayload(mixed $payload): array
+    {
+        if (is_array($payload)) {
+            return array_filter($payload, fn ($value) => is_string($value) && $value !== '');
+        }
+
+        if (! is_string($payload) || $payload === '') {
+            return [];
+        }
+
+        $decoded = json_decode($payload, true);
+        if (! is_array($decoded)) {
+            return [];
+        }
+
+        return array_filter($decoded, fn ($value) => is_string($value) && $value !== '');
     }
 
     /**
