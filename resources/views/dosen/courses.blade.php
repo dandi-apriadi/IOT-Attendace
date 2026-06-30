@@ -50,18 +50,16 @@
                         </div>
 
                         @php
-                            // Check if this specific jadwal is the active session
-                            $isActiveSession = $activeSession
-                                && (
-                                    // Primary: match by jadwal_id if available
-                                    (($activeSession['jadwal_id'] ?? null) && (int) ($activeSession['jadwal_id'] ?? 0) === (int) $jadwal->id)
-                                    // Fallback: match by mata_kuliah_id and kelas_id for legacy sessions
-                                    || (
-                                        !($activeSession['jadwal_id'] ?? null)
-                                        && ($activeSession['mata_kuliah_id'] ?? null) == $jadwal->mata_kuliah_id
-                                        && ($activeSession['kelas_id'] ?? null) == $jadwal->kelas_id
-                                    )
-                                );
+                            // Check if this specific jadwal is one of the active sessions.
+                            $isActiveSession = collect($activeSessions ?? [])
+                                ->contains(function ($session) use ($jadwal) {
+                                    return (($session['jadwal_id'] ?? null) && (int) ($session['jadwal_id'] ?? 0) === (int) $jadwal->id)
+                                        || (
+                                            !($session['jadwal_id'] ?? null)
+                                            && ($session['mata_kuliah_id'] ?? null) == $jadwal->mata_kuliah_id
+                                            && ($session['kelas_id'] ?? null) == $jadwal->kelas_id
+                                        );
+                                });
 
                             $now = now();
                             $jamMulai = \Carbon\Carbon::parse($jadwal->jam_mulai);
@@ -90,6 +88,9 @@
                                 <form action="{{ route('dosen-schedule.stop') }}" method="POST" style="margin:0;">
                                     @csrf
                                     @method('DELETE')
+                                    <input type="hidden" name="jadwal_id" value="{{ $jadwal->id }}">
+                                    <input type="hidden" name="mata_kuliah_id" value="{{ $jadwal->mata_kuliah_id }}">
+                                    <input type="hidden" name="kelas_id" value="{{ $jadwal->kelas_id }}">
                                     <button type="submit" class="btn-kinetic" style="padding:0.55rem 0.8rem; font-size:0.8rem; background:#BA1A1A; color:#fff; box-shadow:none; border:none; cursor:pointer;">
                                         <i class="fas fa-stop-circle"></i> Tutup Sesi
                                     </button>

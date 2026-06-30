@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\Cache;
 class AttendanceSessionService
 {
     public const GRACE_PERIOD_MINUTES = 15;
+    public const ACTIVE_SESSIONS_CACHE_KEY = 'active_attendance_sessions';
+    public const LEGACY_ACTIVE_SESSION_CACHE_KEY = 'active_attendance_session';
 
     /**
      * @return array{jadwal: Jadwal, baseline_time: mixed}|null
@@ -18,21 +20,22 @@ class AttendanceSessionService
     {
         $date = $now->toDateString();
         $time = $now->toTimeString();
-        $manualSession = Cache::get('active_attendance_session');
+        $manualSessions = $this->activeSessions();
 
-        if (
-            $allowManualSession
-            &&
-            is_array($manualSession)
-            && (int) ($manualSession['kelas_id'] ?? 0) === (int) $mahasiswa->kelas_id
-        ) {
-            $manualJadwal = $this->manualSessionSchedule($manualSession, $date);
+        if ($allowManualSession) {
+            foreach ($manualSessions as $manualSession) {
+                if ((int) ($manualSession['kelas_id'] ?? 0) !== (int) $mahasiswa->kelas_id) {
+                    continue;
+                }
 
-            if ($manualJadwal) {
-                return [
-                    'jadwal' => $manualJadwal,
-                    'baseline_time' => $manualJadwal->jam_mulai,
-                ];
+                $manualJadwal = $this->manualSessionSchedule($manualSession, $date);
+
+                if ($manualJadwal) {
+                    return [
+                        'jadwal' => $manualJadwal,
+                        'baseline_time' => $manualJadwal->jam_mulai,
+                    ];
+                }
             }
         }
 
@@ -144,6 +147,75 @@ class AttendanceSessionService
             : 'Pending';
     }
 
+    /**
+     * @return array<string, array<string, mixed>>
+     */
+    public function activeSessions(): array
+    {
+        $sessions = Cache::get(self::ACTIVE_SESSIONS_CACHE_KEY, []);
+        $sessions = is_array($sessions) ? $sessions : [];
+
+        $normalized = [];
+        foreach ($sessions as $key => $session) {
+            if (! is_array($session)) {
+                continue;
+            }
+
+            $normalized[$this->sessionKey($session, (string) $key)] = $session;
+        }
+
+        $legacySession = Cache::get(self::LEGACY_ACTIVE_SESSION_CACHE_KEY);
+        if (is_array($legacySession)) {
+            $normalized[$this->sessionKey($legacySession)] = $legacySession;
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param array<string, mixed> $session
+     */
+    public function putActiveSession(array $session, mixed $ttl = null): void
+    {
+        $sessions = $this->activeSessions();
+        $sessions[$this->sessionKey($session)] = $session;
+
+        Cache::put(
+            self::ACTIVE_SESSIONS_CACHE_KEY,
+            $sessions,
+            $ttl ?: now()->addHours(3)
+        );
+
+        Cache::forget(self::LEGACY_ACTIVE_SESSION_CACHE_KEY);
+    }
+
+    public function forgetActiveSession(?int $jadwalId = null, ?int $mataKuliahId = null, ?int $kelasId = null): void
+    {
+        if ($jadwalId === null && $mataKuliahId === null && $kelasId === null) {
+            Cache::forget(self::ACTIVE_SESSIONS_CACHE_KEY);
+            Cache::forget(self::LEGACY_ACTIVE_SESSION_CACHE_KEY);
+
+            return;
+        }
+
+        $sessions = $this->activeSessions();
+        foreach ($sessions as $key => $session) {
+            $matchesJadwal = $jadwalId !== null && (int) ($session['jadwal_id'] ?? 0) === $jadwalId;
+            $matchesCourseClass = $jadwalId === null
+                && $mataKuliahId !== null
+                && $kelasId !== null
+                && (int) ($session['mata_kuliah_id'] ?? 0) === $mataKuliahId
+                && (int) ($session['kelas_id'] ?? 0) === $kelasId;
+
+            if ($matchesJadwal || $matchesCourseClass) {
+                unset($sessions[$key]);
+            }
+        }
+
+        Cache::put(self::ACTIVE_SESSIONS_CACHE_KEY, $sessions, now()->addHours(3));
+        Cache::forget(self::LEGACY_ACTIVE_SESSION_CACHE_KEY);
+    }
+
     public function livePayloadCacheKey(string $date, mixed $jadwalId): string
     {
         return sprintf(
@@ -175,5 +247,24 @@ class AttendanceSessionService
         }
 
         return $query->first();
+    }
+
+    /**
+     * @param array<string, mixed> $session
+     */
+    private function sessionKey(array $session, ?string $fallback = null): string
+    {
+        if (! empty($session['jadwal_id'])) {
+            return 'jadwal:' . (int) $session['jadwal_id'];
+        }
+
+        $mataKuliahId = (int) ($session['mata_kuliah_id'] ?? 0);
+        $kelasId = (int) ($session['kelas_id'] ?? 0);
+
+        if ($mataKuliahId > 0 && $kelasId > 0) {
+            return "course:{$mataKuliahId}:class:{$kelasId}";
+        }
+
+        return $fallback ?: md5(json_encode($session));
     }
 }

@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Models\Device;
 use App\Models\Absensi;
 use App\Models\SemesterAkademik;
+use App\Services\AttendanceSessionService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -382,6 +383,82 @@ class ApiTest extends TestCase
         $this->assertDatabaseMissing('absensi', [
             'mahasiswa_id' => $otherStudent->id,
             'jadwal_id' => $activeJadwal->id,
+        ]);
+    }
+
+    public function test_beberapa_sesi_manual_bisa_berjalan_bersamaan()
+    {
+        $firstJadwal = Jadwal::firstOrFail();
+        $semester = SemesterAkademik::firstOrFail();
+        $secondClass = Kelas::create(['nama_kelas' => 'TI-3B']);
+        $secondCourse = MataKuliah::create([
+            'kode_mk' => 'JAR001',
+            'nama_mk' => 'Jaringan Komputer',
+            'sks' => 3,
+        ]);
+        $secondDosen = User::create([
+            'name' => 'Dosen Sesi Kedua',
+            'email' => 'dosen-sesi-kedua@example.test',
+            'password' => bcrypt('password'),
+            'role' => 'dosen',
+        ]);
+        $secondJadwal = Jadwal::create([
+            'kelas_id' => $secondClass->id,
+            'mata_kuliah_id' => $secondCourse->id,
+            'user_id' => $secondDosen->id,
+            'semester_akademik_id' => $semester->id,
+            'hari' => now()->format('l'),
+            'jam_mulai' => now()->copy()->subHour()->format('H:i:s'),
+            'jam_selesai' => now()->copy()->addHour()->format('H:i:s'),
+        ]);
+        $secondStudent = Mahasiswa::create([
+            'nim' => '20229977',
+            'nama' => 'Mahasiswa Sesi Kedua',
+            'kelas_id' => $secondClass->id,
+            'rfid_uid' => 'RFID-SECOND-SESSION',
+        ]);
+
+        $sessions = app(AttendanceSessionService::class);
+        $sessions->putActiveSession([
+            'mata_kuliah_id' => $firstJadwal->mata_kuliah_id,
+            'kelas_id' => $firstJadwal->kelas_id,
+            'jadwal_id' => $firstJadwal->id,
+            'started_at' => now()->toDateTimeString(),
+            'user_id' => null,
+            'source' => 'schedule',
+        ], now()->addHours(3));
+        $sessions->putActiveSession([
+            'mata_kuliah_id' => $secondJadwal->mata_kuliah_id,
+            'kelas_id' => $secondJadwal->kelas_id,
+            'jadwal_id' => $secondJadwal->id,
+            'started_at' => now()->toDateTimeString(),
+            'user_id' => null,
+            'source' => 'schedule',
+        ], now()->addHours(3));
+
+        $this->postJson('/api/absensi', [
+            'identifier' => 'RFID123456',
+            'type' => 'RFID',
+        ], [
+            'X-Device-Token' => $this->deviceToken,
+            'X-Device-Id' => $this->deviceId,
+        ])->assertStatus(200);
+
+        $this->postJson('/api/absensi', [
+            'identifier' => 'RFID-SECOND-SESSION',
+            'type' => 'RFID',
+        ], [
+            'X-Device-Token' => $this->deviceToken,
+            'X-Device-Id' => $this->deviceId,
+        ])->assertStatus(200);
+
+        $this->assertDatabaseHas('absensi', [
+            'jadwal_id' => $firstJadwal->id,
+            'mahasiswa_id' => Mahasiswa::where('rfid_uid', 'RFID123456')->firstOrFail()->id,
+        ]);
+        $this->assertDatabaseHas('absensi', [
+            'jadwal_id' => $secondJadwal->id,
+            'mahasiswa_id' => $secondStudent->id,
         ]);
     }
 

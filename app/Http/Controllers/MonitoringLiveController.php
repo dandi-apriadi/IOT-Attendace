@@ -9,8 +9,8 @@ use App\Services\AttendanceSessionService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\View\View;
 
 class MonitoringLiveController extends Controller
@@ -22,7 +22,12 @@ class MonitoringLiveController extends Controller
         $payload = $this->buildLivePayload($selectedDate, $selectedJadwalId);
 
         // Get active attendance session from cache
-        $activeSession = Cache::get('active_attendance_session');
+        $activeSessions = $this->attendanceSessions()->activeSessions();
+        $activeSession = collect($activeSessions)
+            ->when($selectedJadwalId, fn ($sessions) => $sessions->filter(
+                fn ($session) => (int) ($session['jadwal_id'] ?? 0) === (int) $selectedJadwalId
+            ))
+            ->first() ?: collect($activeSessions)->first();
         $activeSessionInfo = null;
 
         if ($activeSession) {

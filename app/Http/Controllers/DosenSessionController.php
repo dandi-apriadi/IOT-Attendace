@@ -13,7 +13,6 @@ use App\Services\AttendanceSessionService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\View\View;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -33,10 +32,11 @@ class DosenSessionController extends Controller
         $user = $request->user();
         $assignedCourseIds = $this->assignedCourseIds((int) ($user?->id ?? 0));
 
-        $activeSession = Cache::get('active_attendance_session');
+        $attendanceSessions = $this->attendanceSessions();
+        $activeSessions = $attendanceSessions->activeSessions();
 
         // Auto-close: only close if the specific jadwal's time has passed on its scheduled day
-        if ($activeSession) {
+        foreach ($activeSessions as $activeSession) {
             $now = now();
             $jadwalId = $activeSession['jadwal_id'] ?? null;
 
@@ -45,12 +45,10 @@ class DosenSessionController extends Controller
 
                 if ($jadwal) {
                     if ($this->isSessionCompleted($now->toDateString(), $jadwal)) {
-                        Cache::forget('active_attendance_session');
-                        $activeSession = null;
+                        $attendanceSessions->forgetActiveSession((int) $jadwal->id);
                     }
                 } else {
-                    Cache::forget('active_attendance_session');
-                    $activeSession = null;
+                    $attendanceSessions->forgetActiveSession((int) $jadwalId);
                 }
             } else {
                 // Legacy session without jadwal_id - close if any matching schedule has passed
@@ -61,47 +59,43 @@ class DosenSessionController extends Controller
 
                 if ($jadwal) {
                     if ($this->isSessionCompleted($now->toDateString(), $jadwal)) {
-                        Cache::forget('active_attendance_session');
-                        $activeSession = null;
+                        $attendanceSessions->forgetActiveSession(null, (int) $jadwal->mata_kuliah_id, (int) $jadwal->kelas_id);
                     }
                 }
             }
         }
+        $activeSessions = $attendanceSessions->activeSessions();
 
-        // Auto-open: if no active session but a schedule is currently in its time window, open it
-        if (! $activeSession) {
-            $now = now();
-            $currentTime = $now->format('H:i:s');
-            $dayNames = $this->dayNames($now);
+        // Auto-open: every current schedule can be active independently.
+        $now = now();
+        $currentTime = $now->format('H:i:s');
+        $dayNames = $this->dayNames($now);
 
-            $autoOpenJadwal = Jadwal::query()
-                ->with(['semesterAkademik', 'kelas', 'mata_kuliah'])
-                ->whereIn('hari', $dayNames)
-                ->where('jam_mulai', '<=', $currentTime)
-                ->where('jam_selesai', '>=', $currentTime)
-                ->when($user?->role !== 'admin', function ($builder) use ($assignedCourseIds): void {
-                    if ($assignedCourseIds === []) {
-                        $builder->whereRaw('1 = 0');
-                    } else {
-                        $builder->whereIn('mata_kuliah_id', $assignedCourseIds);
-                    }
-                })
-                ->orderBy('jam_mulai')
-                ->first();
-
-            if ($autoOpenJadwal) {
-                $activeSession = [
+        Jadwal::query()
+            ->with(['semesterAkademik', 'kelas', 'mata_kuliah'])
+            ->whereIn('hari', $dayNames)
+            ->where('jam_mulai', '<=', $currentTime)
+            ->where('jam_selesai', '>=', $currentTime)
+            ->when($user?->role !== 'admin', function ($builder) use ($assignedCourseIds): void {
+                if ($assignedCourseIds === []) {
+                    $builder->whereRaw('1 = 0');
+                } else {
+                    $builder->whereIn('mata_kuliah_id', $assignedCourseIds);
+                }
+            })
+            ->orderBy('jam_mulai')
+            ->get()
+            ->each(function (Jadwal $autoOpenJadwal) use ($attendanceSessions, $user): void {
+                $attendanceSessions->putActiveSession([
                     'mata_kuliah_id' => $autoOpenJadwal->mata_kuliah_id,
                     'kelas_id' => $autoOpenJadwal->kelas_id,
                     'jadwal_id' => $autoOpenJadwal->id,
                     'started_at' => now()->toDateTimeString(),
                     'user_id' => $user?->id,
                     'source' => 'auto_schedule',
-                ];
-
-                Cache::put('active_attendance_session', $activeSession, now()->addHours(3));
-            }
-        }
+                ], now()->addHours(3));
+            });
+        $activeSessions = $attendanceSessions->activeSessions();
 
         $query = Jadwal::with(['semesterAkademik', 'kelas', 'mata_kuliah'])
             ->when($user?->role !== 'admin', function ($builder) use ($assignedCourseIds): void {
@@ -134,7 +128,8 @@ class DosenSessionController extends Controller
             'groupedSchedules' => $groupedSchedules,
             'todayDate' => now()->toDateString(),
             'assignedCourseIds' => $assignedCourseIds,
-            'activeSession' => $activeSession,
+            'activeSession' => collect($activeSessions)->first(),
+            'activeSessions' => $activeSessions,
         ]);
     }
 
@@ -187,7 +182,7 @@ class DosenSessionController extends Controller
             $targetJadwal = $jadwalQuery->first();
         }
 
-        Cache::put('active_attendance_session', [
+        $this->attendanceSessions()->putActiveSession([
             'mata_kuliah_id' => $data['mata_kuliah_id'],
             'kelas_id' => $data['kelas_id'],
             'jadwal_id' => $targetJadwal?->id,
@@ -199,9 +194,14 @@ class DosenSessionController extends Controller
         return redirect()->route('monitoring')->with('success', 'Sesi presensi jadwal berhasil diaktifkan.');
     }
 
-    public function destroy(): RedirectResponse
+    public function destroy(Request $request): RedirectResponse
     {
-        Cache::forget('active_attendance_session');
+        $this->attendanceSessions()->forgetActiveSession(
+            $request->filled('jadwal_id') ? (int) $request->input('jadwal_id') : null,
+            $request->filled('mata_kuliah_id') ? (int) $request->input('mata_kuliah_id') : null,
+            $request->filled('kelas_id') ? (int) $request->input('kelas_id') : null,
+        );
+
         return redirect()->route('dosen-courses')->with('success', 'Sesi presensi telah ditutup.');
     }
 
@@ -309,7 +309,8 @@ class DosenSessionController extends Controller
 
     private function buildDetailData(string $selectedDate, $mataKuliahId = null, $kelasId = null): array
     {
-        $activeSession = Cache::get('active_attendance_session');
+        $activeSessions = $this->attendanceSessions()->activeSessions();
+        $activeSession = collect($activeSessions)->first();
         $currentUser = request()->user();
 
         // Prioritize parameters, fallback to cache
