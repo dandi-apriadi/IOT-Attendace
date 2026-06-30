@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Device;
+use App\Models\DeviceCommand;
 use App\Models\Kelas;
 use App\Models\Mahasiswa;
 use App\Models\MataKuliah;
@@ -10,6 +11,7 @@ use App\Models\Absensi;
 use App\Models\Jadwal;
 use App\Models\SemesterAkademik;
 use App\Models\User;
+use App\Services\DeviceCommandService;
 use App\Services\ZktecoService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -19,6 +21,65 @@ use Tests\TestCase;
 class ZktecoBiometricSyncTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_dosen_has_stable_zkteco_uid_and_can_store_fingerprint_template(): void
+    {
+        $dosen = User::create([
+            'name' => 'Dosen Fingerprint',
+            'email' => 'dosen-fingerprint@example.test',
+            'password' => bcrypt('password'),
+            'role' => 'dosen',
+        ]);
+
+        $this->assertSame(50000 + $dosen->id, $dosen->fresh()->zktecoUid());
+
+        $dosen->update([
+            'zk_uid' => $dosen->zktecoUid(),
+            'fingerprint_data' => ['0' => 'template-a'],
+            'fingerprint_synced_at' => now(),
+        ]);
+
+        $this->assertSame(['0' => 'template-a'], $dosen->fresh()->fingerprint_data);
+        $this->assertNotNull($dosen->fresh()->fingerprint_synced_at);
+    }
+
+    public function test_agent_pull_biometrics_stores_registered_lecturer_fingerprint_template(): void
+    {
+        $device = Device::create([
+            'device_id' => 'ZK_DOSEN_PULL',
+            'name' => 'ZKTeco Dosen Pull',
+            'type' => 'zkteco',
+            'ip_address' => '192.168.0.30',
+            'port' => 4370,
+            'token_hash' => hash('sha256', 'test-token'),
+            'is_active' => true,
+        ]);
+        $dosen = User::create([
+            'name' => 'Dosen Pull',
+            'email' => 'dosen-pull@example.test',
+            'password' => bcrypt('password'),
+            'role' => 'dosen',
+        ]);
+        $command = DeviceCommand::create([
+            'device_id' => $device->id,
+            'type' => 'pull_biometrics',
+            'status' => 'queued',
+        ]);
+
+        app(DeviceCommandService::class)->applyResult($command, [
+            'users' => [[
+                'uid' => 50000 + $dosen->id,
+                'userid' => (string) (50000 + $dosen->id),
+                'has_fingerprint' => true,
+                'fingerprint_data' => ['0' => 'template-pull'],
+            ]],
+        ]);
+
+        $dosen->refresh();
+        $this->assertSame(50000 + $dosen->id, $dosen->zk_uid);
+        $this->assertSame(['0' => 'template-pull'], $dosen->fingerprint_data);
+        $this->assertNotNull($dosen->fingerprint_synced_at);
+    }
 
     public function test_sync_registered_student_biometrics_updates_existing_students_only(): void
     {

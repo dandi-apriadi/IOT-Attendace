@@ -172,50 +172,51 @@ class ZktecoService
     }
 
     /**
-     * Mendorong SELURUH mahasiswa ke perangkat dalam satu sesi koneksi,
+     * Mendorong SELURUH mahasiswa dan dosen ke perangkat dalam satu sesi koneksi,
      * lalu memverifikasi dengan membaca ulang daftar user dan mengulang
      * (retry) yang belum terdaftar — koneksi UDP kadang men-drop paket
      * sehingga sebagian setUser tidak benar-benar tersimpan.
      *
-     * @return array{success: int, failed: int, total: int, retried: int, errors: array<string>}
+     * @return array{success: int, failed: int, total: int, retried: int, fingerprints: int, errors: array<string>}
      */
     public function pushAllUsers(): array
     {
         return $this->withConnection(function (ZKTeco $zk) {
             $errors = [];
+            $users = app(DeviceCommandService::class)->buildAllUsersPayload()['users'];
+            $fingerprints = 0;
 
-            $push = function ($m) use ($zk, &$errors): bool {
+            $push = function (array $user) use ($zk, &$errors, &$fingerprints): bool {
                 try {
                     $zk->setUser(
-                        (int) $m->id,
-                        (string) $m->nim,
-                        mb_substr((string) $m->nama, 0, 24),
+                        (int) ($user['uid'] ?? 0),
+                        (string) ($user['userid'] ?? ''),
+                        mb_substr((string) ($user['name'] ?? ''), 0, 24),
                         '',
                         Util::LEVEL_USER,
                         0
                     );
 
+                    $fingerprintData = $this->decodeFingerprintPayload($user['fingerprint_data'] ?? null);
+                    if ($fingerprintData !== []) {
+                        $fingerprints += (int) $zk->setFingerprint((int) ($user['uid'] ?? 0), $fingerprintData);
+                    }
+
                     return true;
                 } catch (\Throwable $e) {
                     if (count($errors) < 10) {
-                        $errors[] = "{$m->nim}: {$e->getMessage()}";
+                        $label = (string) ($user['userid'] ?? $user['uid'] ?? '-');
+                        $errors[] = "{$label}: {$e->getMessage()}";
                     }
 
                     return false;
                 }
             };
 
-            // Pass 1: dorong semua mahasiswa.
-            $total = 0;
-            Mahasiswa::query()
-                ->select(['id', 'nim', 'nama'])
-                ->orderBy('id')
-                ->chunk(200, function ($mahasiswas) use ($push, &$total) {
-                    foreach ($mahasiswas as $m) {
-                        $push($m);
-                        $total++;
-                    }
-                });
+            $total = count($users);
+            foreach ($users as $user) {
+                $push($user);
+            }
 
             // Verifikasi: baca kembali uid yang benar-benar terdaftar.
             $registered = collect($zk->getUser() ?: [])
@@ -223,27 +224,29 @@ class ZktecoService
                 ->map(fn ($u) => (int) $u)
                 ->all();
 
-            // Pass 2: ulangi mahasiswa yang belum terdaftar (mis. drop UDP).
+            // Pass 2: ulangi user yang belum terdaftar (mis. drop UDP).
             $retried = 0;
-            Mahasiswa::query()
-                ->select(['id', 'nim', 'nama'])
-                ->whereNotIn('id', $registered ?: [0])
-                ->orderBy('id')
-                ->chunk(100, function ($mahasiswas) use ($push, &$retried) {
-                    foreach ($mahasiswas as $m) {
-                        $retried++;
-                        $push($m);
-                    }
-                });
+            foreach ($users as $user) {
+                if (! in_array((int) ($user['uid'] ?? 0), $registered, true)) {
+                    $retried++;
+                    $push($user);
+                }
+            }
 
             // Hitung jumlah terverifikasi akhir.
-            $verified = collect($zk->getUser() ?: [])->count();
+            $registeredAfterRetry = collect($zk->getUser() ?: [])
+                ->pluck('uid')
+                ->map(fn ($u) => (int) $u)
+                ->all();
+            $expectedUids = array_map(fn (array $user) => (int) ($user['uid'] ?? 0), $users);
+            $verified = count(array_intersect($expectedUids, $registeredAfterRetry));
 
             return [
                 'success' => $verified,
                 'failed' => max(0, $total - $verified),
                 'total' => $total,
                 'retried' => $retried,
+                'fingerprints' => $fingerprints,
                 'errors' => $errors,
             ];
         });
@@ -744,5 +747,27 @@ class ZktecoService
         }
 
         return $value;
+    }
+
+    /**
+     * @return array<int|string, string>
+     */
+    private function decodeFingerprintPayload(mixed $payload): array
+    {
+        if (! is_array($payload)) {
+            return [];
+        }
+
+        $decoded = [];
+        foreach ($payload as $fingerId => $template) {
+            if (! is_string($template) || $template === '') {
+                continue;
+            }
+
+            $binary = base64_decode($template, true);
+            $decoded[$fingerId] = $binary !== false ? $binary : $template;
+        }
+
+        return $decoded;
     }
 }

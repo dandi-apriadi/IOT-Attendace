@@ -396,7 +396,7 @@ class DeviceController extends Controller
     }
 
     /**
-     * Mendorong seluruh mahasiswa ke perangkat.
+     * Mendorong seluruh mahasiswa dan dosen ke perangkat.
      */
     public function syncUsers(Request $request, Device $device): RedirectResponse|JsonResponse
     {
@@ -433,7 +433,7 @@ class DeviceController extends Controller
                 $request->user()?->id
             );
 
-            $msg = "Sinkronisasi selesai: {$result['success']} user terverifikasi di perangkat (dari {$result['total']} mahasiswa)";
+            $msg = "Sinkronisasi selesai: {$result['success']} user terverifikasi di perangkat (dari {$result['total']} user)";
             if (($result['retried'] ?? 0) > 0) {
                 $msg .= ", {$result['retried']} di-retry";
             }

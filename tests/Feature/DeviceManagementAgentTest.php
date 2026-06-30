@@ -7,7 +7,9 @@ use App\Models\DeviceCommand;
 use App\Models\Kelas;
 use App\Models\Mahasiswa;
 use App\Models\User;
+use App\Services\DeviceCommandService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Jmrashed\Zkteco\Lib\ZKTeco;
 use Tests\TestCase;
 
 class DeviceManagementAgentTest extends TestCase
@@ -213,6 +215,118 @@ class DeviceManagementAgentTest extends TestCase
         $response->assertOk()
             ->assertSee('/master/devices/scan', false)
             ->assertDontSee('Scan dari Agent');
+    }
+
+    public function test_push_all_users_payload_includes_students_and_lecturers(): void
+    {
+        $kelas = Kelas::create(['nama_kelas' => 'TI-1A']);
+        $mahasiswa = Mahasiswa::create([
+            'nim' => '23022001',
+            'nama' => 'Mahasiswa Sync',
+            'kelas_id' => $kelas->id,
+        ]);
+        $dosen = User::create([
+            'name' => 'Dosen Sync',
+            'email' => 'dosen-sync@example.test',
+            'password' => bcrypt('password'),
+            'role' => 'dosen',
+            'fingerprint_data' => ['0' => 'template-sync'],
+        ]);
+
+        $payload = app(DeviceCommandService::class)->buildAllUsersPayload();
+
+        $this->assertContains([
+            'uid' => $mahasiswa->id,
+            'userid' => $mahasiswa->nim,
+            'name' => 'Mahasiswa Sync',
+            'kind' => 'mahasiswa',
+        ], $payload['users']);
+        $this->assertContains([
+            'uid' => 50000 + $dosen->id,
+            'userid' => (string) (50000 + $dosen->id),
+            'name' => 'Dosen Sync',
+            'kind' => 'dosen',
+            'fingerprint_data' => ['0' => 'template-sync'],
+        ], $payload['users']);
+    }
+
+    public function test_push_all_users_payload_keeps_lecturers_without_fingerprint_syncable(): void
+    {
+        $dosen = User::create([
+            'name' => 'Dosen Belum Enroll',
+            'email' => 'dosen-belum-enroll@example.test',
+            'password' => bcrypt('password'),
+            'role' => 'dosen',
+        ]);
+
+        $payload = app(DeviceCommandService::class)->buildAllUsersPayload();
+
+        $this->assertContains([
+            'uid' => 50000 + $dosen->id,
+            'userid' => (string) (50000 + $dosen->id),
+            'name' => 'Dosen Belum Enroll',
+            'kind' => 'dosen',
+        ], $payload['users']);
+    }
+
+    public function test_agent_push_all_users_sets_lecturer_user_before_fingerprint(): void
+    {
+        $script = file_get_contents(base_path('tools/agent/agent.php'));
+        $start = strpos($script, 'function execute_command');
+        $end = strpos($script, 'function process_commands');
+
+        $this->assertIsInt($start);
+        $this->assertIsInt($end);
+
+        $namespace = 'Tests\\Feature\\AgentRuntime' . str_replace('.', '', uniqid('', true));
+        eval(
+            "namespace {$namespace}; use Jmrashed\\Zkteco\\Lib\\Helper\\Util; use Jmrashed\\Zkteco\\Lib\\ZKTeco; "
+            . substr($script, $start, $end - $start)
+        );
+
+        $zk = new class extends ZKTeco {
+            public array $calls = [];
+
+            public function __construct()
+            {
+            }
+
+            public function setUser($uid, $userid, $name, $password, $role = 0, $cardno = 0): void
+            {
+                $this->calls[] = ['setUser', $uid, $userid, $name, $role, $cardno];
+            }
+
+            public function setFingerprint($uid, array $data): int
+            {
+                $this->calls[] = ['setFingerprint', $uid, $data];
+
+                return count($data);
+            }
+        };
+
+        $executeCommand = $namespace . '\\execute_command';
+
+        [$success, $result, $error] = $executeCommand(
+            $zk,
+            'push_all_users',
+            [
+                'users' => [[
+                    'uid' => 50025,
+                    'userid' => '50025',
+                    'name' => 'Dosen Agent',
+                    'kind' => 'dosen',
+                    'fingerprint_data' => ['0' => 'template-agent'],
+                ]],
+            ]
+        );
+
+        $this->assertTrue($success);
+        $this->assertNull($error);
+        $this->assertCount(2, $zk->calls);
+        $this->assertSame('setUser', $zk->calls[0][0]);
+        $this->assertSame('setFingerprint', $zk->calls[1][0]);
+        $this->assertSame(1, $result['pushed']);
+        $this->assertSame(1, $result['fingerprints']);
     }
 
     private function createDevice(array $overrides = []): Device

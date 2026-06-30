@@ -237,6 +237,7 @@ function execute_command(ZKTeco $zk, string $type, array $payload): array
             case 'push_user':
                 $users = $payload['users'] ?? [];
                 $count = 0;
+                $fingerprints = 0;
                 foreach ($users as $u) {
                     $zk->setUser(
                         (int) ($u['uid'] ?? 0),
@@ -246,9 +247,15 @@ function execute_command(ZKTeco $zk, string $type, array $payload): array
                         Util::LEVEL_USER,
                         0
                     );
+
+                    $fingerprintData = normalize_fingerprint_payload($u['fingerprint_data'] ?? null);
+                    if ($fingerprintData !== []) {
+                        $fingerprints += (int) $zk->setFingerprint((int) ($u['uid'] ?? 0), $fingerprintData);
+                    }
+
                     $count++;
                 }
-                return [true, ['pushed' => $count], null];
+                return [true, ['pushed' => $count, 'fingerprints' => $fingerprints], null];
 
             case 'remove_user':
                 $zk->removeUser((int) ($payload['uid'] ?? 0));
@@ -318,12 +325,27 @@ function execute_command(ZKTeco $zk, string $type, array $payload): array
                 $rows = [];
                 foreach ((array) $zk->getUser() as $u) {
                     $uid = (int) ($u['uid'] ?? 0);
-                    $rows[] = [
+                    $hasFingerprint = false;
+                    $fingerprintData = [];
+
+                    try {
+                        $fp = $zk->getFingerprint($uid);
+                        $fingerprintData = encode_fingerprint_payload($fp);
+                        $hasFingerprint = $fingerprintData !== [];
+                    } catch (\Throwable $e) {
+                        $hasFingerprint = false;
+                    }
+
+                    $row = [
                         'uid' => $uid,
                         'userid' => clean_value((string) ($u['userid'] ?? '')),
                         'cardno' => clean_value((string) ($u['cardno'] ?? '')),
-                        'has_fingerprint' => has_fingerprint($zk, $uid),
+                        'has_fingerprint' => $hasFingerprint,
                     ];
+                    if ($fingerprintData !== []) {
+                        $row['fingerprint_data'] = $fingerprintData;
+                    }
+                    $rows[] = $row;
                 }
                 return [true, ['users' => $rows], null];
 
@@ -337,6 +359,43 @@ function execute_command(ZKTeco $zk, string $type, array $payload): array
     } catch (\Throwable $e) {
         return [false, null, $e->getMessage()];
     }
+}
+
+function normalize_fingerprint_payload($payload): array
+{
+    if (! is_array($payload)) {
+        return [];
+    }
+
+    $normalized = [];
+    foreach ($payload as $fingerId => $template) {
+        if (! is_string($template) || $template === '') {
+            continue;
+        }
+
+        $binary = base64_decode($template, true);
+        $normalized[$fingerId] = $binary !== false ? $binary : $template;
+    }
+
+    return $normalized;
+}
+
+function encode_fingerprint_payload($payload): array
+{
+    if (! is_array($payload)) {
+        return [];
+    }
+
+    $encoded = [];
+    foreach ($payload as $fingerId => $template) {
+        if (! is_string($template) || $template === '') {
+            continue;
+        }
+
+        $encoded[$fingerId] = base64_encode($template);
+    }
+
+    return $encoded;
 }
 
 /**

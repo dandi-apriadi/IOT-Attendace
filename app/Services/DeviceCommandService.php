@@ -5,7 +5,7 @@ namespace App\Services;
 use App\Models\Device;
 use App\Models\DeviceCommand;
 use App\Models\Mahasiswa;
-use App\Services\ZktecoService;
+use App\Models\User;
 use Illuminate\Support\Str;
 
 /**
@@ -34,11 +34,9 @@ class DeviceCommandService
     }
 
     /**
-     * Payload untuk push_all_users: seluruh mahasiswa dalam format alat.
-     * Mapping identik dengan ZktecoService::pushUser
-     * (uid = id, userid = nim, name = nama maks 24 char).
+     * Payload untuk push_all_users: seluruh mahasiswa dan dosen dalam format alat.
      *
-     * @return array{users: array<int, array{uid: int, userid: string, name: string}>}
+     * @return array{users: array<int, array<string, mixed>>}
      */
     public function buildAllUsersPayload(): array
     {
@@ -49,7 +47,17 @@ class DeviceCommandService
             ->orderBy('id')
             ->chunk(500, function ($mahasiswas) use (&$users): void {
                 foreach ($mahasiswas as $m) {
-                    $users[] = $this->mapUser($m);
+                    $users[] = $this->mapMahasiswaUser($m);
+                }
+            });
+
+        User::query()
+            ->where('role', 'dosen')
+            ->select(['id', 'name', 'zk_uid', 'fingerprint_data'])
+            ->orderBy('id')
+            ->chunk(500, function ($dosens) use (&$users): void {
+                foreach ($dosens as $dosen) {
+                    $users[] = $this->mapDosenUser($dosen);
                 }
             });
 
@@ -64,22 +72,43 @@ class DeviceCommandService
     public function buildSingleUserPayload(Mahasiswa $mahasiswa, string $method = 'rfid_fingerprint'): array
     {
         return [
-            'users' => [$this->mapUser($mahasiswa)],
+            'users' => [$this->mapMahasiswaUser($mahasiswa)],
             'mahasiswa_id' => (int) $mahasiswa->id,
             'method' => $method,
         ];
     }
 
     /**
-     * @return array{uid: int, userid: string, name: string}
+     * @return array{uid: int, userid: string, name: string, kind: string}
      */
-    private function mapUser(Mahasiswa $m): array
+    private function mapMahasiswaUser(Mahasiswa $m): array
     {
         return [
             'uid' => (int) $m->id,
             'userid' => (string) $m->nim,
             'name' => mb_substr((string) $m->nama, 0, 24),
+            'kind' => 'mahasiswa',
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function mapDosenUser(User $dosen): array
+    {
+        $uid = $dosen->zktecoUid();
+        $row = [
+            'uid' => $uid,
+            'userid' => (string) $uid,
+            'name' => mb_substr((string) $dosen->name, 0, 24),
+            'kind' => 'dosen',
+        ];
+
+        if (is_array($dosen->fingerprint_data) && $dosen->fingerprint_data !== []) {
+            $row['fingerprint_data'] = $dosen->fingerprint_data;
+        }
+
+        return $row;
     }
 
     /**
@@ -179,6 +208,39 @@ class DeviceCommandService
             $users,
             fn (int $uid): bool => $fingerprintFlags[$uid] ?? false
         );
+
+        $this->applyDosenBiometricsFromUsers($users);
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $users
+     */
+    private function applyDosenBiometricsFromUsers(array $users): void
+    {
+        $dosenByUid = User::query()
+            ->where('role', 'dosen')
+            ->get(['id', 'zk_uid'])
+            ->keyBy(fn (User $dosen) => $dosen->zktecoUid());
+
+        foreach ($users as $user) {
+            $uid = (int) ($user['uid'] ?? 0);
+            $fingerprintData = $user['fingerprint_data'] ?? null;
+
+            if ($uid <= 0 || empty($user['has_fingerprint']) || ! is_array($fingerprintData) || $fingerprintData === []) {
+                continue;
+            }
+
+            $dosen = $dosenByUid->get($uid);
+            if (! $dosen) {
+                continue;
+            }
+
+            $dosen->forceFill([
+                'zk_uid' => $uid,
+                'fingerprint_data' => $fingerprintData,
+                'fingerprint_synced_at' => now(),
+            ])->save();
+        }
     }
 
     /**

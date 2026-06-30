@@ -10,6 +10,8 @@ class User extends Authenticatable
 {
     use HasFactory, Notifiable;
 
+    public const ZKTECO_DOSEN_UID_OFFSET = 50000;
+
     /**
      * The attributes that are mass assignable.
      *
@@ -20,6 +22,9 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
+        'zk_uid',
+        'fingerprint_data',
+        'fingerprint_synced_at',
     ];
 
     /**
@@ -41,7 +46,14 @@ class User extends Authenticatable
     {
         return [
             'password' => 'hashed',
+            'fingerprint_data' => 'array',
+            'fingerprint_synced_at' => 'datetime',
         ];
+    }
+
+    public function zktecoUid(): int
+    {
+        return (int) ($this->zk_uid ?: self::ZKTECO_DOSEN_UID_OFFSET + (int) $this->id);
     }
 
     public function corrections()
