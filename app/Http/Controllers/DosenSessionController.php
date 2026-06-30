@@ -68,12 +68,8 @@ class DosenSessionController extends Controller
             }
         }
 
-        // Auto-open: if no active session but a schedule is currently in its time window, open it.
-        // Skip auto-open if user manually closed the session within the last 4 hours.
-        $manuallyClosedKey = 'session_manually_closed_' . ($user?->id ?? 'guest');
-        $manuallyClosedUntil = Cache::get($manuallyClosedKey);
-
-        if (! $activeSession && (! $manuallyClosedUntil || now()->gt($manuallyClosedUntil))) {
+        // Auto-open: if no active session but a schedule is currently in its time window, open it
+        if (! $activeSession) {
             $now = now();
             $currentTime = $now->format('H:i:s');
             $dayNames = $this->dayNames($now);
@@ -200,20 +196,12 @@ class DosenSessionController extends Controller
             'source' => 'schedule',
         ], now()->addHours(3));
 
-        // Reset flag tutup manual karena user sengaja membuka sesi baru.
-        Cache::forget('session_manually_closed_' . ($request->user()?->id ?? 'guest'));
-
         return redirect()->route('monitoring')->with('success', 'Sesi presensi jadwal berhasil diaktifkan.');
     }
 
-    public function destroy(Request $request): RedirectResponse
+    public function destroy(): RedirectResponse
     {
         Cache::forget('active_attendance_session');
-
-        // Tandai tutup manual agar auto-open tidak membuka ulang sesi dalam 4 jam ke depan.
-        $manuallyClosedKey = 'session_manually_closed_' . ($request->user()?->id ?? 'guest');
-        Cache::put($manuallyClosedKey, now()->addHours(4), now()->addHours(4));
-
         return redirect()->route('dosen-courses')->with('success', 'Sesi presensi telah ditutup.');
     }
 

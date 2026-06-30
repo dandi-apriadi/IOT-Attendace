@@ -13,7 +13,6 @@ use App\Models\User;
 use App\Services\AuditLogger;
 use App\Services\AcademicSemesterSequenceService;
 use App\Services\SemesterPromotionService;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -579,44 +578,6 @@ class MasterDataController extends Controller
 
         return redirect()->route('kelas')->with('success', 'Kelas berhasil dihapus.');
     }
-
-    public function kelasMahasiswa(string $id): JsonResponse
-    {
-        $kelas = Kelas::findOrFail($id);
-        $mahasiswa = $kelas->mahasiswa()->orderBy('nama')->get(['id', 'nim', 'nama']);
-
-        return response()->json([
-            'kelas_id' => $kelas->id,
-            'nama_kelas' => $kelas->nama_kelas,
-            'mahasiswa' => $mahasiswa,
-        ]);
-    }
-
-    public function storeKelasMahasiswa(Request $request, string $id): RedirectResponse
-    {
-        $kelas = Kelas::findOrFail($id);
-
-        $data = $request->validate([
-            'nim' => ['required', 'string', 'max:30', 'unique:mahasiswa,nim'],
-            'nama' => ['required', 'string', 'max:255'],
-        ]);
-
-        $mahasiswa = Mahasiswa::create([
-            'nim' => $data['nim'],
-            'nama' => $data['nama'],
-            'kelas_id' => $kelas->id,
-        ]);
-
-        AuditLogger::log(
-            $request,
-            'tambah_mahasiswa_kelas',
-            'Menambahkan mahasiswa ' . $mahasiswa->nama . ' (' . $mahasiswa->nim . ') ke kelas ' . $kelas->nama_kelas,
-            $request->user()?->id
-        );
-
-        return redirect()->route('kelas')->with('success', 'Mahasiswa ' . $mahasiswa->nama . ' berhasil ditambahkan ke kelas ' . $kelas->nama_kelas . '.');
-    }
-
 
     public function storeJadwal(Request $request): RedirectResponse
     {

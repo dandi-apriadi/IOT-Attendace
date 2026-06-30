@@ -125,6 +125,8 @@
 @push('scripts')
 <script>
 const HEALTH_CSRF = '{{ csrf_token() }}';
+const HEALTH_POLL_INTERVAL_MS = 1500;
+const HEALTH_POLL_MAX_ATTEMPTS = 80;
 
 const STATUS_STYLE = {
     online:   { bg: '#E6F6EC', text: '#1DB173' },
@@ -133,6 +135,33 @@ const STATUS_STYLE = {
     disabled: { bg: '#FADBD8', text: '#BA1A1A' },
     unknown:  { bg: '#EEF0F3', text: '#6b7280' },
 };
+
+async function readHealthJson(res) {
+    const text = await res.text();
+    try {
+        return text ? JSON.parse(text) : {};
+    } catch (e) {
+        throw new Error('Respons server bukan JSON.');
+    }
+}
+
+async function waitForHealthCommand(statusUrl) {
+    for (let attempt = 0; attempt < HEALTH_POLL_MAX_ATTEMPTS; attempt++) {
+        const res = await fetch(statusUrl, { headers: { 'Accept': 'application/json' } });
+        const data = await readHealthJson(res);
+
+        if (data.done) {
+            return { status: 'online', label: 'Online' };
+        }
+        if (data.failed || !data.ok) {
+            return { status: 'offline', label: 'Offline' };
+        }
+
+        await new Promise(resolve => setTimeout(resolve, HEALTH_POLL_INTERVAL_MS));
+    }
+
+    return { status: 'unknown', label: 'Menunggu' };
+}
 
 async function pingDevice(deviceId) {
     const icon = document.getElementById('ping-icon-' + deviceId);
@@ -146,7 +175,15 @@ async function pingDevice(deviceId) {
             method: 'POST',
             headers: { 'X-CSRF-TOKEN': HEALTH_CSRF, 'Accept': 'application/json' },
         });
-        const data = await res.json();
+        let data = await readHealthJson(res);
+
+        if (!res.ok || !data.ok) {
+            throw new Error(data.message || 'Gagal mengecek perangkat.');
+        }
+        if (data.queued && data.status_url) {
+            pill.textContent = 'Menunggu';
+            data = await waitForHealthCommand(data.status_url);
+        }
 
         const s = STATUS_STYLE[data.status] || STATUS_STYLE.unknown;
         pill.style.background = s.bg;

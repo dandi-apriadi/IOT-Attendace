@@ -70,7 +70,7 @@
     </div>
 
     <!-- Error state -->
-    <div id="stateError" style="display:none; background:#fdecec; color:#ba1a1a; padding:1rem 1.25rem; border-radius:8px; display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap;">
+    <div id="stateError" style="display:none; background:#fdecec; color:#ba1a1a; padding:1rem 1.25rem; border-radius:8px; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap;">
         <div>
             <strong>Gagal membaca user dari perangkat:</strong><br>
             <span id="errorMsg" style="font-size:0.85rem;"></span>
@@ -114,6 +114,8 @@ const DEVICE_ID   = {{ $device->id }};
 const DATA_URL    = '{{ route('devices.users-data', $device->id) }}';
 const REMOVE_URL  = '{{ route('devices.remove-user', $device->id) }}';
 const ZK_CSRF     = '{{ csrf_token() }}';
+const POLL_INTERVAL_MS = 1500;
+const POLL_MAX_ATTEMPTS = 80;
 
 function show(id) {
     ['stateLoading','stateError','stateData'].forEach(s => {
@@ -121,7 +123,32 @@ function show(id) {
     });
 }
 
-async function loadUsers() {
+async function readJson(res) {
+    const text = await res.text();
+    try {
+        return text ? JSON.parse(text) : {};
+    } catch (e) {
+        throw new Error('Respons server bukan JSON.');
+    }
+}
+
+async function waitForAgent(statusUrl) {
+    for (let attempt = 0; attempt < POLL_MAX_ATTEMPTS; attempt++) {
+        const res = await fetch(statusUrl, { headers: { 'Accept': 'application/json' } });
+        const data = await readJson(res);
+
+        if (data.done) return data;
+        if (data.failed || !data.ok) {
+            throw new Error(data.message || data.error || 'Perintah agent gagal.');
+        }
+
+        await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+    }
+
+    throw new Error('Agent belum mengirim hasil. Coba refresh beberapa saat lagi.');
+}
+
+async function loadUsers(refresh = true) {
     show('stateLoading');
     document.getElementById('importBar').style.display = 'none';
 
@@ -131,18 +158,27 @@ async function loadUsers() {
     icon.className = 'fas fa-spinner fa-spin';
 
     try {
-        const res  = await fetch(DATA_URL, { headers: { 'Accept': 'application/json' } });
-        const data = await res.json();
+        const url = refresh ? DATA_URL : DATA_URL + '?refresh=0';
+        const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        const data = await readJson(res);
 
-        if (!data.ok) {
-            document.getElementById('errorMsg').textContent = data.message || 'Terjadi kesalahan.';
-            show('stateError');
-        } else {
-            renderUsers(data.users || []);
-            show('stateData');
+        if (!res.ok || !data.ok) {
+            throw new Error(data.message || 'Terjadi kesalahan.');
+        }
+
+        renderUsers(data.users || []);
+        show('stateData');
+
+        if (data.queued && data.status_url) {
+            if (!(data.users || []).length) {
+                show('stateLoading');
+            }
+            await waitForAgent(data.status_url);
+            await loadUsers(false);
+            return;
         }
     } catch (e) {
-        document.getElementById('errorMsg').textContent = 'Tidak dapat menghubungi server: ' + e.message;
+        document.getElementById('errorMsg').textContent = e.message;
         show('stateError');
     }
 
@@ -203,12 +239,17 @@ async function removeUser(uid, name) {
             },
             body: 'uid=' + encodeURIComponent(uid),
         });
+        const data = await readJson(res);
 
-        if (res.ok || res.redirected) {
-            loadUsers();
-        } else {
-            alert('Gagal menghapus user.');
+        if (!res.ok || !data.ok) {
+            throw new Error(data.message || 'Gagal menghapus user.');
         }
+
+        if (data.queued && data.status_url) {
+            await waitForAgent(data.status_url);
+        }
+
+        await loadUsers();
     } catch (e) {
         alert('Gagal: ' + e.message);
     }

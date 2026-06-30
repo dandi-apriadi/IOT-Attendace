@@ -34,21 +34,20 @@
                     <i class="fas fa-radar" style="margin-right:0.4rem;"></i> Scan Perangkat di Jaringan
                 </h4>
                 <p style="font-size: 0.78rem; color: #6b7280; margin: 0.25rem 0 0;">
-                    Memindai seluruh /24 subnet lokal untuk port ZKTeco (4370) dan Custom IoT (80, 8080).
+                    @if (config('agent.role') === 'server')
+                        Agent lokal akan memindai perangkat ZKTeco di jaringan kampus.
+                    @else
+                        Memindai subnet lokal untuk ZKTeco (4370) dan Custom IoT (80, 8080).
+                    @endif
                 </p>
             </div>
             <button id="btnScan" onclick="startScan()" class="btn-kinetic" style="background:#4338ca; color:#fff; white-space:nowrap;">
                 <i class="fas fa-search" id="scanIcon"></i> <span id="scanLabel">Mulai Scan</span>
             </button>
-            @if (config('agent.role') === 'server')
-                <button type="button" onclick="zkScanAgent()" class="btn-kinetic" style="background:#e0f2fe; color:#0369a1; white-space:nowrap;">
-                    <i class="fas fa-search"></i> Scan dari Agent
-                </button>
-            @endif
         </div>
 
         <!-- Scan status / progress -->
-        <div id="scanStatus" style="display:none; font-size:0.82rem; color:#4338ca; padding:0.5rem 0; display:flex; align-items:center; gap:0.5rem;">
+        <div id="scanStatus" style="display:none; font-size:0.82rem; color:#4338ca; padding:0.5rem 0; align-items:center; gap:0.5rem;">
             <span class="spinner" style="display:inline-block; width:14px; height:14px; border:2px solid #c7d2fe; border-top-color:#4338ca; border-radius:50%; animation:spin 0.7s linear infinite;"></span>
             <span id="scanStatusText">Mendeteksi IP lokal dan memindai subnet...</span>
         </div>
@@ -214,6 +213,7 @@
 const ZK_CSRF = '{{ csrf_token() }}';
 const ZK_POLL_INTERVAL_MS = 1500;
 const ZK_POLL_MAX_ATTEMPTS = 80;
+const ZK_AGENT_MODE = @json(config('agent.role') === 'server');
 
 async function startScan() {
     const btn = document.getElementById('btnScan');
@@ -230,7 +230,9 @@ async function startScan() {
     icon.className = 'fas fa-spinner fa-spin';
     label.textContent = 'Memindai...';
     status.style.display = 'flex';
-    statusTxt.textContent = 'Mendeteksi IP lokal dan memindai subnet (maks ~15 detik)...';
+    statusTxt.textContent = ZK_AGENT_MODE
+        ? 'Mengirim permintaan scan ke agent lokal...'
+        : 'Mendeteksi IP lokal dan memindai subnet...';
     results.style.display = 'none';
     grid.innerHTML = '';
     empty.style.display = 'none';
@@ -240,7 +242,30 @@ async function startScan() {
             method: 'POST',
             headers: { 'X-CSRF-TOKEN': ZK_CSRF, 'Accept': 'application/json' },
         });
-        const data = await zkReadJson(res);
+        let data = await zkReadJson(res);
+
+        if (data.queued && data.status_url) {
+            statusTxt.textContent = data.message || 'Menunggu agent memindai jaringan lokal...';
+            const completed = await zkPollCommand('scan', data.status_url);
+
+            if (!completed || completed.failed || !completed.done) {
+                throw new Error(completed?.message || 'Agent belum menyelesaikan scan.');
+            }
+
+            const devices = Array.isArray(completed.result?.devices) ? completed.result.devices : [];
+            data = {
+                ok: true,
+                subnet: 'Jaringan lokal agent',
+                found: devices.map(device => ({
+                    ip: device.ip_address || device.ip || '',
+                    port: device.port || 4370,
+                    type: 'zkteco',
+                    label: device.device_name || null,
+                    serial: device.serial_number || null,
+                    already_registered: true,
+                })),
+            };
+        }
 
         status.style.display = 'none';
         results.style.display = 'block';
@@ -250,7 +275,7 @@ async function startScan() {
         } else {
             const all = data.found || [];
             const newOnes = all.filter(d => !d.already_registered);
-            info.textContent = `Subnet: ${data.subnet} - ${all.length} perangkat ditemukan, ${newOnes.length} belum terdaftar.`;
+            info.textContent = `${data.subnet}: ${all.length} perangkat ditemukan, ${newOnes.length} belum terdaftar.`;
 
             if (all.length === 0) {
                 empty.style.display = 'block';
@@ -468,15 +493,6 @@ async function zkInfo(id) {
         }
     } catch (e) {
         zkShow(id, '❌ Gagal: ' + e.message, true);
-    }
-}
-
-async function zkScanAgent() {
-    zkShow('scan', 'Mengirim perintah scan perangkat ke agent...', false);
-    try {
-        await zkQueueRequest('scan', '{{ route('devices.scan-agent') }}', { method: 'POST' });
-    } catch (e) {
-        zkShow('scan', '❌ Gagal: ' + e.message, true);
     }
 }
 

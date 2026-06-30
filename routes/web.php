@@ -52,6 +52,7 @@ Route::middleware(['auth', 'role:admin,dosen'])->group(function () {
     Route::put('/monitoring/live/{absensi}', [MonitoringLiveController::class, 'update'])->name('monitoring.live.update');
     Route::get('/monitoring/health', [MonitoringHealthController::class, 'index'])->name('iot-health');
     Route::post('/monitoring/health/ping/{device}', [MonitoringHealthController::class, 'pingDevice'])->name('iot-health.ping');
+    Route::get('/master/devices/{device}/commands/{command}/status', [\App\Http\Controllers\DeviceController::class, 'commandStatus'])->name('devices.commands.status');
     Route::get('/monitoring/performance/reports', [MonitoringPerformanceController::class, 'reports'])->name('monitoring.performance.reports');
     Route::get('/monitoring/performance/reports-view', [MonitoringViewController::class, 'performanceReports'])->name('monitoring.performance.view');
 
@@ -131,7 +132,6 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     // Operasi ZKTeco (X609) — komunikasi dua arah ke alat
     Route::post('/master/devices/{device}/test', [\App\Http\Controllers\DeviceController::class, 'testConnection'])->name('devices.test');
     Route::get('/master/devices/{device}/info', [\App\Http\Controllers\DeviceController::class, 'info'])->name('devices.info');
-    Route::get('/master/devices/{device}/commands/{command}/status', [\App\Http\Controllers\DeviceController::class, 'commandStatus'])->name('devices.commands.status');
     Route::post('/master/devices/{device}/sync-users', [\App\Http\Controllers\DeviceController::class, 'syncUsers'])->name('devices.sync-users');
     Route::get('/master/devices/{device}/users', [\App\Http\Controllers\DeviceController::class, 'users'])->name('devices.users');
     Route::get('/master/devices/{device}/users-data', [\App\Http\Controllers\DeviceController::class, 'usersData'])->name('devices.users-data');

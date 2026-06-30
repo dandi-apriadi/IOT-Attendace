@@ -6,7 +6,9 @@ use App\Models\Absensi;
 use App\Models\AuditLog;
 use App\Models\Device;
 use App\Models\PerformanceMetric;
+use App\Services\DeviceCommandService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Jmrashed\Zkteco\Lib\Helper\Util as ZkUtil;
 
@@ -23,18 +25,17 @@ class MonitoringHealthController extends Controller
             ->orderByDesc('last_seen_at')
             ->get();
 
-        // Cek TCP reachability untuk semua perangkat ZKTeco aktif sekaligus.
-        $zkReachable = $this->probeZktecoDevices($allDevices);
+        $usesAgentRelay = $this->usesAgentRelay();
+        $zkReachable = $usesAgentRelay ? [] : $this->probeZktecoDevices($allDevices);
 
-        $devices = $allDevices->map(function (Device $device) use ($onlineThreshold, $zkReachable): Device {
+        $devices = $allDevices->map(function (Device $device) use ($onlineThreshold, $zkReachable, $usesAgentRelay): Device {
             $status = 'unknown';
             $statusLabel = 'Unknown';
 
             if (! $device->is_active) {
                 $status = 'disabled';
                 $statusLabel = 'Disabled';
-            } elseif ($device->type === 'zkteco') {
-                // ZKTeco tidak mengirim heartbeat — gunakan hasil probe TCP langsung.
+            } elseif ($device->type === 'zkteco' && ! $usesAgentRelay) {
                 $key = $device->ip_address . ':' . ($device->port ?: 4370);
                 if (isset($zkReachable[$key])) {
                     $status = 'online';
@@ -155,10 +156,29 @@ class MonitoringHealthController extends Controller
     /**
      * Endpoint JSON: cek ulang koneksi satu perangkat ZKTeco dari UI.
      */
-    public function pingDevice(Device $device): JsonResponse
+    public function pingDevice(Request $request, Device $device): JsonResponse
     {
         if ($device->type !== 'zkteco' || empty($device->ip_address)) {
             return response()->json(['ok' => false, 'message' => 'Bukan perangkat ZKTeco atau IP tidak ada.'], 422);
+        }
+
+        if ($this->usesAgentRelay()) {
+            $command = app(DeviceCommandService::class)->enqueue(
+                $device,
+                'get_info',
+                [],
+                $request->user()?->id
+            );
+
+            return response()->json([
+                'ok' => true,
+                'queued' => true,
+                'command_id' => $command->id,
+                'status_url' => route('devices.commands.status', [$device, $command]),
+                'status' => 'pending',
+                'label' => 'Menunggu',
+                'message' => 'Perintah cek koneksi dikirim ke agent lokal.',
+            ]);
         }
 
         $port      = (int) ($device->port ?: 4370);

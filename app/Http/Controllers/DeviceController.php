@@ -71,6 +71,10 @@ class DeviceController extends Controller
      */
     public function scan(Request $request): JsonResponse
     {
+        if ($this->usesAgentRelay()) {
+            return $this->scanAgentDevices($request);
+        }
+
         set_time_limit(30);
 
         $localIp = $this->detectLocalIp();
@@ -448,30 +452,10 @@ class DeviceController extends Controller
     /**
      * Menampilkan daftar user yang ada di perangkat.
      */
-    public function users(Request $request, Device $device): View
+    public function users(Device $device): View
     {
         if (! $this->isZkteco($device)) {
             abort(404);
-        }
-
-        $deviceUsers = [];
-        $error = null;
-
-        if ($this->usesAgentRelay()) {
-            // Ambil daftar user dari hasil pull_users terakhir; antrekan refresh.
-            $result = $this->latestDoneResult($device, 'pull_users');
-            $deviceUsers = $this->matchDeviceUsers($result['users'] ?? []);
-            app(DeviceCommandService::class)->enqueue($device, 'pull_users', [], $request->user()?->id);
-
-            if (empty($deviceUsers)) {
-                $error = 'Belum ada data user dari agent. Perintah ambil user dikirim — muat ulang halaman ini sebentar lagi.';
-            }
-        } else {
-            try {
-                $deviceUsers = (new ZktecoService($device))->pullUsers();
-            } catch (\Throwable $e) {
-                $error = $e->getMessage();
-            }
         }
 
         return view('master.devices-users', [
@@ -483,10 +467,41 @@ class DeviceController extends Controller
     /**
      * Endpoint JSON untuk mengambil daftar user dari perangkat (dipanggil via fetch).
      */
-    public function usersData(Device $device): JsonResponse
+    public function usersData(Request $request, Device $device): JsonResponse
     {
         if (! $this->isZkteco($device)) {
             return response()->json(['ok' => false, 'message' => 'Perangkat ini bukan tipe ZKTeco.'], 422);
+        }
+
+        if ($this->usesAgentRelay()) {
+            $result = $this->latestDoneResult($device, 'pull_users');
+            $users = $this->matchDeviceUsers($result['users'] ?? []);
+
+            if (! $request->boolean('refresh', true)) {
+                return response()->json([
+                    'ok' => true,
+                    'queued' => false,
+                    'users' => $users,
+                ]);
+            }
+
+            $command = app(DeviceCommandService::class)->enqueue(
+                $device,
+                'pull_users',
+                [],
+                $request->user()?->id
+            );
+
+            return response()->json([
+                'ok' => true,
+                'queued' => true,
+                'command_id' => $command->id,
+                'status_url' => route('devices.commands.status', [$device, $command]),
+                'users' => $users,
+                'message' => $users
+                    ? 'Menampilkan data terakhir. Refresh dari agent sedang berjalan.'
+                    : 'Perintah ambil user dikirim ke agent lokal.',
+            ]);
         }
 
         try {
@@ -664,7 +679,12 @@ class DeviceController extends Controller
         ]);
 
         if ($this->usesAgentRelay()) {
-            app(DeviceCommandService::class)->enqueue($device, 'remove_user', ['uid' => (int) $validated['uid']], $request->user()?->id);
+            $command = app(DeviceCommandService::class)->enqueue(
+                $device,
+                'remove_user',
+                ['uid' => (int) $validated['uid']],
+                $request->user()?->id
+            );
 
             AuditLogger::log(
                 $request,
@@ -672,6 +692,14 @@ class DeviceController extends Controller
                 "Antre hapus user uid {$validated['uid']} dari perangkat " . ($device->name ?: $device->device_id) . ' (via agent)',
                 $request->user()?->id
             );
+
+            if ($request->expectsJson()) {
+                return $this->queuedCommandResponse(
+                    $device,
+                    $command,
+                    "Perintah hapus user uid {$validated['uid']} dikirim ke agent lokal."
+                );
+            }
 
             return back()->with('success', "Perintah hapus user uid {$validated['uid']} dikirim ke agent lokal.");
         }
@@ -806,10 +834,17 @@ class DeviceController extends Controller
         return $command?->result;
     }
 
-    public function commandStatus(Device $device, DeviceCommand $command): JsonResponse
+    public function commandStatus(Request $request, Device $device, DeviceCommand $command): JsonResponse
     {
         if ((int) $command->device_id !== (int) $device->id) {
             return response()->json(['ok' => false, 'message' => 'Perintah tidak cocok dengan perangkat ini.'], 404);
+        }
+
+        if (
+            $request->user()?->role !== 'admin'
+            && ($command->type !== 'get_info' || (int) $command->requested_by !== (int) $request->user()?->id)
+        ) {
+            abort(403);
         }
 
         return response()->json($this->commandStatusPayload($command->fresh()));
