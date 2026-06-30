@@ -209,19 +209,24 @@ class DeviceCommandService
             fn (int $uid): bool => $fingerprintFlags[$uid] ?? false
         );
 
-        $this->applyDosenBiometricsFromUsers($users);
+        $dosenUpdated = $this->applyDosenBiometricsFromUsers($users);
+
+        if ($dosenUpdated > 0) {
+            $this->enqueueAllActiveZktecoUserSyncs($command->requested_by);
+        }
     }
 
     /**
      * @param array<int, array<string, mixed>> $users
      */
-    private function applyDosenBiometricsFromUsers(array $users): void
+    public function applyDosenBiometricsFromUsers(array $users): int
     {
         $dosenByUid = User::query()
             ->where('role', 'dosen')
             ->get(['id', 'zk_uid'])
             ->keyBy(fn (User $dosen) => $dosen->zktecoUid());
 
+        $updated = 0;
         foreach ($users as $user) {
             $uid = (int) ($user['uid'] ?? 0);
             $fingerprintData = $user['fingerprint_data'] ?? null;
@@ -240,7 +245,29 @@ class DeviceCommandService
                 'fingerprint_data' => $fingerprintData,
                 'fingerprint_synced_at' => now(),
             ])->save();
+
+            $updated++;
         }
+
+        return $updated;
+    }
+
+    public function enqueueAllActiveZktecoUserSyncs(?int $userId = null): int
+    {
+        $payload = $this->buildAllUsersPayload();
+        $queued = 0;
+
+        Device::query()
+            ->where('type', 'zkteco')
+            ->where('is_active', true)
+            ->orderBy('id')
+            ->get()
+            ->each(function (Device $device) use ($payload, $userId, &$queued): void {
+                $this->enqueue($device, 'push_all_users', $payload, $userId);
+                $queued++;
+            });
+
+        return $queued;
     }
 
     /**

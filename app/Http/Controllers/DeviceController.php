@@ -627,7 +627,7 @@ class DeviceController extends Controller
                 return $this->queuedCommandResponse($device, $command, 'Perintah tarik biometrik dikirim ke agent lokal. Menunggu hasil eksekusi agent.');
             }
 
-            return back()->with('success', 'Perintah tarik biometrik dikirim ke agent lokal. Data kartu/sidik jari mahasiswa akan diperbarui setelah agent membaca alat.');
+            return back()->with('success', 'Perintah tarik biometrik dikirim ke agent lokal. Data kartu/sidik jari mahasiswa dan sidik jari dosen akan diperbarui setelah agent membaca alat. Jika ada sidik jari dosen baru, sistem otomatis menyiapkan sync ke semua perangkat ZKTeco aktif.');
         }
 
         try {
@@ -645,6 +645,17 @@ class DeviceController extends Controller
 
             if ($result['rfid_updated'] > 0 || $result['fingerprint_updated'] > 0) {
                 $message .= " ({$result['rfid_updated']} RFID, {$result['fingerprint_updated']} sidik jari)";
+            }
+            $dosenFingerprintUpdated = (int) ($result['dosen_fingerprint_updated'] ?? 0);
+            if ($dosenFingerprintUpdated > 0) {
+                $syncResult = $this->syncAllActiveZktecoDevices();
+                $message .= ", {$dosenFingerprintUpdated} sidik jari dosen diperbarui dan disinkronkan ke {$syncResult['synced']} perangkat ZKTeco aktif";
+
+                if ($syncResult['failed'] > 0) {
+                    $message .= ", {$syncResult['failed']} perangkat gagal sync";
+
+                    return back()->with('error', $message . '. ' . implode(' ', $syncResult['errors']));
+                }
             }
             if ($result['unmatched'] > 0) {
                 $message .= ", {$result['unmatched']} belum ada di sistem";
@@ -815,6 +826,45 @@ class DeviceController extends Controller
     private function isZkteco(Device $device): bool
     {
         return $device->type === 'zkteco' && ! empty($device->ip_address);
+    }
+
+    /**
+     * @return array{synced: int, failed: int, errors: array<int, string>}
+     */
+    private function syncAllActiveZktecoDevices(): array
+    {
+        $synced = 0;
+        $failed = 0;
+        $errors = [];
+
+        Device::query()
+            ->where('type', 'zkteco')
+            ->where('is_active', true)
+            ->orderBy('id')
+            ->get()
+            ->each(function (Device $target) use (&$synced, &$failed, &$errors): void {
+                try {
+                    $result = (new ZktecoService($target))->pushAllUsers();
+
+                    if (($result['failed'] ?? 0) > 0) {
+                        $failed++;
+                        if (count($errors) < 5) {
+                            $errors[] = ($target->name ?: $target->device_id) . ': ' . (int) $result['failed'] . ' user gagal sync.';
+                        }
+
+                        return;
+                    }
+
+                    $synced++;
+                } catch (\Throwable $e) {
+                    $failed++;
+                    if (count($errors) < 5) {
+                        $errors[] = ($target->name ?: $target->device_id) . ': ' . $e->getMessage();
+                    }
+                }
+            });
+
+        return compact('synced', 'failed', 'errors');
     }
 
     /**

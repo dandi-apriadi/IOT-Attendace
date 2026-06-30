@@ -313,19 +313,38 @@ class ZktecoService
     {
         return $this->withConnection(function (ZKTeco $zk) {
             $users = $zk->getUser();
+            $users = is_array($users) ? $users : [];
+            $fingerprintDataByUid = [];
 
-            return $this->syncRegisteredStudentBiometricsFromUsers(
-                is_array($users) ? $users : [],
-                function (int $uid) use ($zk): bool {
-                    try {
-                        $fp = $zk->getFingerprint($uid);
-
-                        return is_array($fp) ? count(array_filter($fp)) > 0 : ! empty($fp);
-                    } catch (\Throwable $e) {
-                        return false;
-                    }
+            foreach ($users as $index => $user) {
+                $uid = (int) ($user['uid'] ?? 0);
+                if ($uid <= 0) {
+                    continue;
                 }
+
+                try {
+                    $fp = $zk->getFingerprint($uid);
+                    $fingerprintData = $this->encodeFingerprintPayload($fp);
+
+                    if ($fingerprintData !== []) {
+                        $fingerprintDataByUid[$uid] = $fingerprintData;
+                        $users[$index]['has_fingerprint'] = true;
+                        $users[$index]['fingerprint_data'] = $fingerprintData;
+                    }
+                } catch (\Throwable $e) {
+                    $users[$index]['has_fingerprint'] = false;
+                }
+            }
+
+            $result = $this->syncRegisteredStudentBiometricsFromUsers(
+                $users,
+                fn (int $uid): bool => isset($fingerprintDataByUid[$uid])
             );
+
+            $result['dosen_fingerprint_updated'] = app(DeviceCommandService::class)
+                ->applyDosenBiometricsFromUsers($users);
+
+            return $result;
         });
     }
 
@@ -769,5 +788,26 @@ class ZktecoService
         }
 
         return $decoded;
+    }
+
+    /**
+     * @return array<int|string, string>
+     */
+    private function encodeFingerprintPayload(mixed $payload): array
+    {
+        if (! is_array($payload)) {
+            return [];
+        }
+
+        $encoded = [];
+        foreach ($payload as $fingerId => $template) {
+            if (! is_string($template) || $template === '') {
+                continue;
+            }
+
+            $encoded[$fingerId] = base64_encode($template);
+        }
+
+        return $encoded;
     }
 }
