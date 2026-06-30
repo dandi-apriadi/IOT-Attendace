@@ -29,11 +29,9 @@ class EnsureValidDeviceToken
                 ->first();
 
             if (! $device) {
-                // TEMP: log token hash so we can register unknown devices.
                 Log::warning('API akses ditolak: device_id tidak valid/nonaktif', [
                     'device_id' => $incomingDeviceId,
                     'ip' => $request->ip(),
-                    'token_hash' => hash('sha256', $incomingToken),
                 ]);
 
                 return new JsonResponse([
