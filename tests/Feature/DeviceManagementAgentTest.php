@@ -104,9 +104,55 @@ class DeviceManagementAgentTest extends TestCase
         $this->actingAs($this->admin)
             ->get("/master/devices/{$device->id}/users")
             ->assertOk()
-            ->assertSee('Cari User');
+            ->assertSee('Cari User')
+            ->assertSee('Kirim Semua ke Alat');
 
         $this->assertDatabaseCount('device_commands', 0);
+    }
+
+    public function test_device_users_page_sync_button_queues_all_students_and_lecturers(): void
+    {
+        $device = $this->createDevice();
+        $kelas = Kelas::create(['nama_kelas' => 'TI-1A']);
+        $mahasiswa = Mahasiswa::create([
+            'nim' => '23022001',
+            'nama' => 'Mahasiswa Tombol',
+            'kelas_id' => $kelas->id,
+        ]);
+        $dosen = User::create([
+            'name' => 'Dosen Tombol',
+            'email' => 'dosen-tombol@example.test',
+            'password' => bcrypt('password'),
+            'role' => 'dosen',
+            'fingerprint_data' => ['0' => 'template-tombol'],
+        ]);
+
+        $response = $this->actingAs($this->admin)
+            ->postJson("/master/devices/{$device->id}/sync-users");
+
+        $response->assertOk()
+            ->assertJson([
+                'ok' => true,
+                'queued' => true,
+            ])
+            ->assertJsonStructure(['command_id', 'status_url']);
+
+        $command = DeviceCommand::findOrFail($response->json('command_id'));
+
+        $this->assertSame('push_all_users', $command->type);
+        $this->assertContains([
+            'uid' => $mahasiswa->id,
+            'userid' => $mahasiswa->nim,
+            'name' => 'Mahasiswa Tombol',
+            'kind' => 'mahasiswa',
+        ], $command->payload['users']);
+        $this->assertContains([
+            'uid' => 50000 + $dosen->id,
+            'userid' => (string) (50000 + $dosen->id),
+            'name' => 'Dosen Tombol',
+            'kind' => 'dosen',
+            'fingerprint_data' => ['0' => 'template-tombol'],
+        ], $command->payload['users']);
     }
 
     public function test_server_remove_user_returns_agent_queue_metadata_as_json(): void

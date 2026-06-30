@@ -11,7 +11,7 @@
 
 @section('content')
 <div class="glass-card">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+    <div class="device-users-header">
         <div>
             <h3 class="display-font" style="font-size: 1.1rem; color: var(--primary-blue-container); margin:0;">
                 User di {{ $device->name ?: $device->device_id }}
@@ -20,7 +20,10 @@
                 {{ $device->ip_address }}:{{ $device->port ?: 4370 }}
             </div>
         </div>
-        <div style="display:flex; gap:0.5rem; align-items:center;">
+        <div class="device-users-actions">
+            <button id="btnSyncAll" onclick="syncAllUsers()" class="btn-kinetic device-users-sync-btn">
+                <i class="fas fa-upload" id="syncAllIcon"></i> Kirim Semua ke Alat
+            </button>
             <button id="btnRefresh" onclick="loadUsers()" class="btn-kinetic"
                 style="background:#eef2ff; color:#4338ca; box-shadow:none; font-size:0.8rem;">
                 <i class="fas fa-rotate-right" id="refreshIcon"></i> Refresh
@@ -128,6 +131,21 @@
     margin-bottom: 1rem;
     flex-wrap: wrap;
 }
+.device-users-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+.device-users-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
 .device-users-search {
     display: flex;
     align-items: center;
@@ -174,7 +192,24 @@
     background: #f1f3f5;
     color: var(--text-primary);
 }
+.device-users-sync-btn {
+    background: #dcfce7;
+    color: #166534;
+    box-shadow: none;
+    border: 0;
+    cursor: pointer;
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
 @media (max-width: 720px) {
+    .device-users-header,
+    .device-users-actions {
+        align-items: stretch;
+    }
+    .device-users-actions,
+    .device-users-actions > * {
+        width: 100%;
+    }
     .device-users-toolbar,
     .device-users-search {
         align-items: stretch;
@@ -197,6 +232,7 @@
 const DEVICE_ID   = {{ $device->id }};
 const DATA_URL    = '{{ route('devices.users-data', $device->id) }}';
 const REMOVE_URL  = '{{ route('devices.remove-user', $device->id) }}';
+const SYNC_USERS_URL = '{{ route('devices.sync-users', $device->id) }}';
 const ZK_CSRF     = '{{ csrf_token() }}';
 const POLL_INTERVAL_MS = 1500;
 const POLL_MAX_ATTEMPTS = 80;
@@ -376,6 +412,44 @@ async function removeUser(uid, name) {
         await loadUsers();
     } catch (e) {
         alert('Gagal: ' + e.message);
+    }
+}
+
+async function syncAllUsers() {
+    if (!confirm('Kirim semua data mahasiswa dan dosen dari sistem ke alat ini?')) return;
+
+    const btn = document.getElementById('btnSyncAll');
+    const icon = document.getElementById('syncAllIcon');
+    const originalText = btn.innerHTML;
+
+    btn.disabled = true;
+    icon.className = 'fas fa-spinner fa-spin';
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Mengirim...';
+
+    try {
+        const res = await fetch(SYNC_USERS_URL, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': ZK_CSRF,
+                'Accept': 'application/json',
+            },
+        });
+        const data = await readJson(res);
+
+        if (!res.ok || !data.ok) {
+            throw new Error(data.message || 'Gagal mengirim data ke alat.');
+        }
+
+        if (data.queued && data.status_url) {
+            await waitForAgent(data.status_url);
+        }
+
+        await loadUsers();
+    } catch (e) {
+        alert('Gagal: ' + e.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
     }
 }
 

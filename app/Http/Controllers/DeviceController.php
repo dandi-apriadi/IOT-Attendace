@@ -401,6 +401,10 @@ class DeviceController extends Controller
     public function syncUsers(Request $request, Device $device): RedirectResponse|JsonResponse
     {
         if (! $this->isZkteco($device)) {
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => 'Perangkat ini bukan tipe ZKTeco.'], 422);
+            }
+
             return back()->with('error', 'Perangkat ini bukan tipe ZKTeco.');
         }
 
@@ -440,11 +444,35 @@ class DeviceController extends Controller
             if ($result['failed'] > 0) {
                 $msg .= ", {$result['failed']} GAGAL";
 
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'ok' => false,
+                        'message' => $msg . '. Coba Sync Users lagi.',
+                        'result' => $result,
+                    ], 500);
+                }
+
                 return back()->with('error', $msg . '. Coba Sync Users lagi.');
+            }
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'ok' => true,
+                    'done' => true,
+                    'message' => $msg . '.',
+                    'result' => $result,
+                ]);
             }
 
             return back()->with('success', $msg . '.');
         } catch (\Throwable $e) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Gagal sinkronisasi: ' . $e->getMessage(),
+                ], 500);
+            }
+
             return back()->with('error', 'Gagal sinkronisasi: ' . $e->getMessage());
         }
     }
