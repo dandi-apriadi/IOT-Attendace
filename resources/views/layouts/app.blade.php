@@ -4,7 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>{{ $title ?? 'IoT Attendance System' }} | Poltek Manado</title>
+    <title>{{ $title ?? 'PresenSync' }} | Poltek Manado</title>
+    <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
+    <link rel="icon" type="image/png" href="{{ asset('favicon.png') }}">
+    <link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.png') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="{{ asset('css/premium-design.css') }}">
@@ -15,8 +18,8 @@
         <!-- Sidebar -->
         <aside class="sidebar">
             <div class="sidebar-brand">
-                <i class="fas fa-microchip"></i>
-                <span>TECH-PRESENCE</span>
+                <img src="{{ asset('images/presensync-mark.png') }}" alt="PresenSync" style="width:32px; height:32px; object-fit:contain;">
+                <span>PresenSync</span>
             </div>
             
             <nav class="nav-menu">
@@ -68,7 +71,7 @@
             <header>
                 <div class="header-left">
                     <div class="header-breadcrumb">
-                        <span>IoT System</span>
+                        <span>PresenSync</span>
                         <span class="breadcrumb-sep">/</span>
                         @yield('breadcrumb')
                     </div>

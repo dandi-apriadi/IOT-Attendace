@@ -1,4 +1,4 @@
-# 📊 Database Schema — IoT Attendance System
+# 📊 Database Schema — PresenSync
 
 Dokumentasi lengkap skema database dan relasi untuk sistem absensi IoT berbasis Laravel.
 
@@ -63,7 +63,7 @@ Salin kode di bawah ini ke [dbdiagram.io](https://dbdiagram.io/d) untuk menghasi
 
 ```dbml
 // ----------------------------------
-// Skema Database IoT Attendance System
+// Skema Database PresenSync
 // ----------------------------------
 
 // Tabel Pengguna & Autentikasi

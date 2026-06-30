@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live Attendance Billboard - IoT System</title>
+    <title>Live Attendance Billboard | PresenSync</title>
+    <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
+    <link rel="icon" type="image/png" href="{{ asset('favicon.png') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Manrope:wght@800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ asset('css/premium-design.css') }}">
     <style>
@@ -160,7 +162,7 @@
         <div class="live-section">
             <div class="live-title">
                 <span class="live-indicator"></span>
-                LIVE ATTENDANCE STREAM
+                PRESENSYNC LIVE STREAM
             </div>
             
             <div class="stream-grid">

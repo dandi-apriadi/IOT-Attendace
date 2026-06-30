@@ -1,5 +1,5 @@
 # 🔌 API REFERENCE DOCUMENTATION
-## IoT Attendance System API Endpoints
+## PresenSync API Endpoints
 
 **Base URL:** `http://localhost:8000/api`  
 **Authentication:** Device Token (X-Device-Token header)

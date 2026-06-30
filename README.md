@@ -1,4 +1,4 @@
-# IoT-Attendance System (Sistem Absensi Terintegrasi)
+# PresenSync (Sistem Absensi Terintegrasi)
 
 Sistem absensi otomatis berbasis IoT dan Framework Laravel yang mendukung berbagai metode identifikasi (RFID, Fingerprint, Barcode, dan Face Recognition). Dirancang untuk transparansi dan efisiensi kehadiran mahasiswa di lingkungan kampus.
 
