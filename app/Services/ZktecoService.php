@@ -7,6 +7,7 @@ use App\Models\Device;
 use App\Models\Jadwal;
 use App\Models\Mahasiswa;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Jmrashed\Zkteco\Lib\Helper\Util;
 use Jmrashed\Zkteco\Lib\ZKTeco;
@@ -24,6 +25,7 @@ class ZktecoService
     private string $ip;
     private int $port;
     private ?ZKTeco $zk = null;
+    private const SOCKET_TIMEOUT_SECONDS = 3;
 
     public function __construct(Device $device)
     {
@@ -53,7 +55,11 @@ class ZktecoService
         }
 
         for ($i = 0; $i < $attempts; $i++) {
+            // Tutup socket lama sebelum membuat koneksi baru agar tidak leak.
+            $this->disconnect();
+
             $this->zk = new ZKTeco($this->ip, $this->port);
+            $this->configureSocketTimeout($this->zk);
 
             if (@$this->zk->connect()) {
                 if ($this->device->exists) {
@@ -63,13 +69,21 @@ class ZktecoService
                 return true;
             }
 
-            // Jeda singkat sebelum mencoba lagi.
-            usleep(500000);
+            // Jeda sebelum mencoba lagi (semakin lama per percobaan).
+            usleep(500_000 * ($i + 1));
         }
 
         $this->zk = null;
 
         return false;
+    }
+
+    private function configureSocketTimeout(ZKTeco $zk): void
+    {
+        $timeout = ['sec' => self::SOCKET_TIMEOUT_SECONDS, 'usec' => 0];
+
+        @socket_set_option($zk->_zkclient, SOL_SOCKET, SO_RCVTIMEO, $timeout);
+        @socket_set_option($zk->_zkclient, SOL_SOCKET, SO_SNDTIMEO, $timeout);
     }
 
     public function disconnect(): void
@@ -95,7 +109,7 @@ class ZktecoService
         $previous = error_reporting(E_ALL & ~E_DEPRECATED & ~E_NOTICE & ~E_WARNING);
 
         try {
-            if (! $this->connect()) {
+            if (! $this->connect(3)) {
                 throw new \RuntimeException("Gagal terhubung ke perangkat di {$this->ip}:{$this->port}.");
             }
 
@@ -615,6 +629,14 @@ class ZktecoService
             return $match;
         };
 
+        // Ambil sesi manual aktif sekali (jika ada) untuk fallback scan hari ini.
+        $manualSession = Cache::get('active_attendance_session');
+        $today = now()->toDateString();
+
+        $skipNoUid = 0;
+        $skipNoMahasiswa = 0;
+        $skipNoJadwal = 0;
+
         // Pass 1: resolve mahasiswa + jadwal untuk tiap record, kumpulkan kandidat insert.
         $candidates = [];
         foreach ($attendances as $record) {
@@ -623,6 +645,7 @@ class ZktecoService
 
             if (! $uid || ! $timestamp) {
                 $skipped++;
+                $skipNoUid++;
                 continue;
             }
 
@@ -631,13 +654,25 @@ class ZktecoService
 
             if (! $mahasiswa) {
                 $skipped++;
+                $skipNoMahasiswa++;
                 continue;
             }
 
             $jadwal = $findJadwal((int) $mahasiswa->kelas_id, $time);
 
+            // Fallback ke sesi manual jika scan hari ini dan tidak ada jadwal otomatis.
+            if (! $jadwal && $time->toDateString() === $today && is_array($manualSession)) {
+                if ((int) ($manualSession['kelas_id'] ?? 0) === (int) $mahasiswa->kelas_id) {
+                    $manualJadwal = $attendanceSessions->manualSessionSchedule($manualSession, $today);
+                    if ($manualJadwal) {
+                        $jadwal = $manualJadwal;
+                    }
+                }
+            }
+
             if (! $jadwal) {
                 $skipped++;
+                $skipNoJadwal++;
                 continue;
             }
 
@@ -648,6 +683,10 @@ class ZktecoService
                 'date'      => $time->toDateString(),
                 'status'    => $attendanceSessions->statusForTap($time->toTimeString(), $jadwal->jam_mulai),
             ];
+        }
+
+        if ($skipNoMahasiswa > 0 || $skipNoJadwal > 0) {
+            Log::info("ZKTeco import skip detail dari {$this->ip}: tidak_ada_uid={$skipNoUid}, tidak_ada_mahasiswa={$skipNoMahasiswa}, tidak_ada_jadwal={$skipNoJadwal}");
         }
 
         // Batch check absensi yang sudah ada (1 query, bukan N query).

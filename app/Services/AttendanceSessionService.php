@@ -159,7 +159,7 @@ class AttendanceSessionService
         Cache::forget($this->livePayloadCacheKey($date, $jadwalId));
     }
 
-    private function manualSessionSchedule(array $manualSession, string $date): ?Jadwal
+    public function manualSessionSchedule(array $manualSession, string $date): ?Jadwal
     {
         $query = Jadwal::query()
             ->with(['mata_kuliah', 'semesterAkademik'])

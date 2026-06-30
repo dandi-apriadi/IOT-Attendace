@@ -6,7 +6,9 @@ use App\Models\Absensi;
 use App\Models\AuditLog;
 use App\Models\Device;
 use App\Models\PerformanceMetric;
+use Illuminate\Http\JsonResponse;
 use Illuminate\View\View;
+use Jmrashed\Zkteco\Lib\Helper\Util as ZkUtil;
 
 class MonitoringHealthController extends Controller
 {
@@ -16,30 +18,44 @@ class MonitoringHealthController extends Controller
         $today = $now->toDateString();
         $onlineThreshold = $now->copy()->subMinutes(5);
 
-        $devices = Device::query()
+        $allDevices = Device::query()
             ->orderByDesc('is_active')
             ->orderByDesc('last_seen_at')
-            ->get()
-            ->map(function (Device $device) use ($onlineThreshold): Device {
-                $status = 'unknown';
-                $statusLabel = 'Unknown';
+            ->get();
 
-                if (! $device->is_active) {
-                    $status = 'disabled';
-                    $statusLabel = 'Disabled';
-                } elseif ($device->last_seen_at && $device->last_seen_at->gte($onlineThreshold)) {
+        // Cek TCP reachability untuk semua perangkat ZKTeco aktif sekaligus.
+        $zkReachable = $this->probeZktecoDevices($allDevices);
+
+        $devices = $allDevices->map(function (Device $device) use ($onlineThreshold, $zkReachable): Device {
+            $status = 'unknown';
+            $statusLabel = 'Unknown';
+
+            if (! $device->is_active) {
+                $status = 'disabled';
+                $statusLabel = 'Disabled';
+            } elseif ($device->type === 'zkteco') {
+                // ZKTeco tidak mengirim heartbeat — gunakan hasil probe TCP langsung.
+                $key = $device->ip_address . ':' . ($device->port ?: 4370);
+                if (isset($zkReachable[$key])) {
                     $status = 'online';
                     $statusLabel = 'Online';
-                } elseif ($device->last_seen_at) {
-                    $status = 'stale';
-                    $statusLabel = 'Stale';
+                } else {
+                    $status = 'offline';
+                    $statusLabel = 'Offline';
                 }
+            } elseif ($device->last_seen_at && $device->last_seen_at->gte($onlineThreshold)) {
+                $status = 'online';
+                $statusLabel = 'Online';
+            } elseif ($device->last_seen_at) {
+                $status = 'stale';
+                $statusLabel = 'Stale';
+            }
 
-                $device->computed_status = $status;
-                $device->computed_status_label = $statusLabel;
+            $device->computed_status = $status;
+            $device->computed_status_label = $statusLabel;
 
-                return $device;
-            });
+            return $device;
+        });
 
         $onlineDevices = $devices->where('computed_status', 'online')->count();
         $activeDevices = $devices->where('is_active', true)->count();
@@ -134,5 +150,140 @@ class MonitoringHealthController extends Controller
                 'latest_ms' => $latestLatencyMs,
             ],
         ]);
+    }
+
+    /**
+     * Endpoint JSON: cek ulang koneksi satu perangkat ZKTeco dari UI.
+     */
+    public function pingDevice(Device $device): JsonResponse
+    {
+        if ($device->type !== 'zkteco' || empty($device->ip_address)) {
+            return response()->json(['ok' => false, 'message' => 'Bukan perangkat ZKTeco atau IP tidak ada.'], 422);
+        }
+
+        $port      = (int) ($device->port ?: 4370);
+        $reachable = $this->udpProbe($device->ip_address, $port, 2000);
+
+        if ($reachable) {
+            $device->forceFill(['last_seen_at' => now()])->save();
+        }
+
+        return response()->json([
+            'ok'     => $reachable,
+            'status' => $reachable ? 'online' : 'offline',
+            'label'  => $reachable ? 'Online' : 'Offline',
+            'message' => $reachable
+                ? 'Perangkat merespons di ' . $device->ip_address . ':' . $port . '.'
+                : 'Perangkat tidak merespons di ' . $device->ip_address . ':' . $port . '.',
+        ]);
+    }
+
+    /**
+     * Probe semua perangkat ZKTeco aktif secara paralel menggunakan paket
+     * UDP CMD_CONNECT — protokol asli ZKTeco, bukan TCP.
+     *
+     * @param  \Illuminate\Support\Collection<int, Device>  $devices
+     * @return array<string, true>  key = "ip:port"
+     */
+    private function probeZktecoDevices(\Illuminate\Support\Collection $devices): array
+    {
+        $targets = $devices->filter(
+            fn (Device $d) => $d->type === 'zkteco' && $d->is_active && ! empty($d->ip_address)
+        );
+
+        if ($targets->isEmpty()) {
+            return [];
+        }
+
+        $connectPacket = $this->buildZkConnectPacket();
+
+        // Simpan pasangan [sock, key] — hindari (int)$sock karena PHP 8+
+        // mengembalikan objek Socket bukan resource, sehingga cast ke int gagal.
+        /** @var array<int, array{sock: \Socket, key: string}> $entries */
+        $entries = [];
+
+        foreach ($targets as $device) {
+            $port = (int) ($device->port ?: 4370);
+            $key  = $device->ip_address . ':' . $port;
+
+            $sock = @socket_create(AF_INET, SOCK_DGRAM, SOL_UDP);
+            if ($sock === false) {
+                continue;
+            }
+
+            socket_set_nonblock($sock);
+            @socket_sendto($sock, $connectPacket, strlen($connectPacket), 0, $device->ip_address, $port);
+
+            $entries[] = ['sock' => $sock, 'key' => $key];
+        }
+
+        if (empty($entries)) {
+            return [];
+        }
+
+        // Tunggu respons masuk — maks 1.5 detik.
+        $read   = array_column($entries, 'sock');
+        $write  = null;
+        $except = null;
+        @socket_select($read, $write, $except, 1, 500_000);
+
+        // $read sekarang hanya berisi socket yang punya data masuk.
+        $reachable = [];
+        foreach ($read as $readySock) {
+            foreach ($entries as $entry) {
+                if ($entry['sock'] === $readySock) {
+                    $reachable[$entry['key']] = true;
+                    break;
+                }
+            }
+        }
+
+        foreach ($entries as $entry) {
+            @socket_close($entry['sock']);
+        }
+
+        return $reachable;
+    }
+
+    /**
+     * Probe satu perangkat ZKTeco via UDP dengan batas waktu $timeoutMs.
+     */
+    private function udpProbe(string $ip, int $port, int $timeoutMs = 1500): bool
+    {
+        $sock = @socket_create(AF_INET, SOCK_DGRAM, SOL_UDP);
+        if ($sock === false) {
+            return false;
+        }
+
+        socket_set_nonblock($sock);
+
+        $packet = $this->buildZkConnectPacket();
+        @socket_sendto($sock, $packet, strlen($packet), 0, $ip, $port);
+
+        $read   = [$sock];
+        $write  = [];
+        $except = [];
+        $sec    = intdiv($timeoutMs, 1000);
+        $usec   = ($timeoutMs % 1000) * 1_000;
+        $result = @socket_select($read, $write, $except, $sec, $usec);
+
+        @socket_close($sock);
+
+        return $result > 0 && ! empty($read);
+    }
+
+    /**
+     * Membangun paket UDP CMD_CONNECT menggunakan helper library ZKTeco
+     * agar format dan checksum dijamin identik dengan protokol aslinya.
+     */
+    private function buildZkConnectPacket(): string
+    {
+        return ZkUtil::createHeader(
+            ZkUtil::CMD_CONNECT,  // 1000
+            0,                    // chksum awal (akan dihitung ulang di dalam)
+            0,                    // session_id
+            ZkUtil::USHRT_MAX - 1, // reply_id awal
+            ''
+        );
     }
 }

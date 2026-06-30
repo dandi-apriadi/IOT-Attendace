@@ -54,8 +54,17 @@
                     <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom:0.35rem;">Semester: {{ $kelas->semester_level ? 'S' . $kelas->semester_level : '-' }}</p>
                     <p style="font-size: 0.8rem; color: var(--text-muted);">Berikutnya: {{ $kelas->nextKelas?->nama_kelas ?? 'Belum diatur' }}</p>
                 </div>
-                
-                <div style="margin-top: 1.5rem; display: flex; gap: 0.5rem; border-top: 1px solid #f1f3f5; padding-top: 1rem;">
+
+                <div style="margin-top: 1.5rem; display: flex; gap: 0.5rem; border-top: 1px solid #f1f3f5; padding-top: 1rem; flex-wrap: wrap;">
+                    <button
+                        class="btn-kinetic btn-mahasiswa"
+                        style="flex: 2; padding: 0.5rem; font-size: 0.75rem; background: #EEF2FF; color: #3730A3; box-shadow: none;"
+                        data-kelas-id="{{ $kelas->id }}"
+                        data-kelas-nama="{{ $kelas->nama_kelas }}"
+                        onclick="openMahasiswaModal(this)"
+                    >
+                        <i class="fas fa-users"></i> Mahasiswa
+                    </button>
                     <a href="{{ route('kelas.edit', $kelas->id) }}" class="btn-kinetic" style="flex: 1; padding: 0.5rem; font-size: 0.75rem; background: #F1F3F5; color: var(--text-primary); text-decoration: none; text-align: center; box-shadow: none;">
                         <i class="fas fa-edit"></i> Edit
                     </a>
@@ -77,4 +86,133 @@
         {{ $kelasList->links() }}
     </div>
 </div>
+
+<!-- Modal Mahasiswa -->
+<div id="modalMahasiswa" style="display:none; position:fixed; inset:0; z-index:1000; background:rgba(0,0,0,0.4); overflow-y:auto; padding: 2rem 1rem;">
+    <div style="background:#fff; border-radius:12px; max-width:560px; margin:0 auto; padding:1.5rem; position:relative;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.25rem;">
+            <h3 class="display-font" style="font-size:1rem;" id="modalKelasNama">Mahasiswa Kelas</h3>
+            <button onclick="closeMahasiswaModal()" style="background:none; border:none; font-size:1.25rem; cursor:pointer; color:#6b7280;">&times;</button>
+        </div>
+
+        <!-- Tambah Mahasiswa Form -->
+        <div class="glass-card" style="background:#f8fafc; padding:1rem; margin-bottom:1.25rem;">
+            <h4 class="display-font" style="font-size:0.8rem; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.75rem;">Tambah Mahasiswa Baru</h4>
+            <form id="formTambahMahasiswa" method="POST" style="display:flex; flex-direction:column; gap:0.6rem;">
+                @csrf
+                <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                    <input id="inputNim" name="nim" type="text" placeholder="NIM" class="form-control" style="flex:1; min-width:120px;" required>
+                    <input id="inputNama" name="nama" type="text" placeholder="Nama Lengkap" class="form-control" style="flex:2; min-width:160px;" required>
+                </div>
+                <div id="formError" style="display:none; color:#BA1A1A; font-size:0.8rem;"></div>
+                <button class="btn-kinetic" type="submit" style="align-self:flex-start;"><i class="fas fa-plus"></i> Tambahkan</button>
+            </form>
+        </div>
+
+        <!-- Daftar Mahasiswa -->
+        <div>
+            <h4 class="display-font" style="font-size:0.8rem; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.75rem;">
+                Daftar Mahasiswa <span id="mahasiswaCount" style="font-weight:400;"></span>
+            </h4>
+            <div id="mahasiswaList" style="display:flex; flex-direction:column; gap:0.5rem; max-height:300px; overflow-y:auto;">
+                <div style="color:#6b7280; font-size:0.85rem;">Memuat data...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentKelasId = null;
+
+function openMahasiswaModal(btn) {
+    currentKelasId = btn.dataset.kelasId;
+    document.getElementById('modalKelasNama').textContent = 'Mahasiswa Kelas ' + btn.dataset.kelasNama;
+    document.getElementById('formTambahMahasiswa').action = '/master/kelas/' + currentKelasId + '/mahasiswa';
+    document.getElementById('inputNim').value = '';
+    document.getElementById('inputNama').value = '';
+    document.getElementById('formError').style.display = 'none';
+    document.getElementById('modalMahasiswa').style.display = 'block';
+    loadMahasiswa(currentKelasId);
+}
+
+function closeMahasiswaModal() {
+    document.getElementById('modalMahasiswa').style.display = 'none';
+    currentKelasId = null;
+}
+
+function loadMahasiswa(kelasId) {
+    const list = document.getElementById('mahasiswaList');
+    const count = document.getElementById('mahasiswaCount');
+    list.innerHTML = '<div style="color:#6b7280; font-size:0.85rem;">Memuat data...</div>';
+
+    fetch('/master/kelas/' + kelasId + '/mahasiswa', {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(r => r.json())
+    .then(data => {
+        count.textContent = '(' + data.mahasiswa.length + ')';
+        if (data.mahasiswa.length === 0) {
+            list.innerHTML = '<div style="color:#6b7280; font-size:0.85rem;">Belum ada mahasiswa di kelas ini.</div>';
+            return;
+        }
+        list.innerHTML = data.mahasiswa.map(m => `
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:0.5rem 0.75rem; background:#f8fafc; border-radius:8px; font-size:0.85rem;">
+                <span style="font-weight:600; color:var(--text-primary);">${escHtml(m.nim)}</span>
+                <span style="flex:1; margin:0 0.75rem; color:var(--text-primary);">${escHtml(m.nama)}</span>
+                <a href="/master/mahasiswa/${m.id}/edit" style="color:#3730A3; font-size:0.75rem; text-decoration:none;"><i class="fas fa-edit"></i></a>
+            </div>
+        `).join('');
+    })
+    .catch(() => {
+        list.innerHTML = '<div style="color:#BA1A1A; font-size:0.85rem;">Gagal memuat data.</div>';
+    });
+}
+
+function escHtml(str) {
+    return String(str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+}
+
+document.getElementById('formTambahMahasiswa').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const form = this;
+    const errBox = document.getElementById('formError');
+    errBox.style.display = 'none';
+
+    fetch(form.action, {
+        method: 'POST',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json',
+            'X-CSRF-TOKEN': form.querySelector('[name=_token]').value,
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams(new FormData(form)),
+    })
+    .then(async r => {
+        if (r.ok || r.status === 302) {
+            // Server redirects on success — refresh page to update counts
+            window.location.reload();
+            return;
+        }
+        const json = await r.json().catch(() => null);
+        if (json && json.errors) {
+            const msgs = Object.values(json.errors).flat().join(' ');
+            errBox.textContent = msgs;
+            errBox.style.display = 'block';
+        } else {
+            errBox.textContent = 'Terjadi kesalahan. Coba lagi.';
+            errBox.style.display = 'block';
+        }
+    })
+    .catch(() => {
+        // Network / redirect — just reload
+        window.location.reload();
+    });
+});
+
+// Close modal when clicking backdrop
+document.getElementById('modalMahasiswa').addEventListener('click', function(e) {
+    if (e.target === this) closeMahasiswaModal();
+});
+</script>
 @endsection

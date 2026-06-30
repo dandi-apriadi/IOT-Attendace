@@ -10,9 +10,10 @@
  *      Diulang hingga POLL_LIMIT atau antrean kosong.
  *
  * Penggunaan:
- *   php agent.php            # satu siklus lalu keluar (untuk cron / Task Scheduler)
- *   php agent.php --loop     # berjalan terus dengan jeda antar siklus
- *   php agent.php --loop=30  # loop dengan jeda 30 detik
+ *   php agent.php                    # satu siklus, baca .env dari direktori ini
+ *   php agent.php --env=.env.x609-02 # satu siklus, baca file env kustom
+ *   php agent.php --loop             # berjalan terus dengan jeda antar siklus
+ *   php agent.php --loop=30          # loop dengan jeda 30 detik
  */
 
 require __DIR__ . '/vendor/autoload.php';
@@ -25,7 +26,16 @@ use Jmrashed\Zkteco\Lib\ZKTeco;
 error_reporting(E_ALL & ~E_DEPRECATED & ~E_NOTICE & ~E_WARNING);
 @set_time_limit(0);
 
-Dotenv::createImmutable(__DIR__)->safeLoad();
+// Deteksi --env=<file> dari argv agar bisa dijalankan multi-instance
+$envFile = '.env';
+foreach ($argv as $arg) {
+    if (str_starts_with($arg, '--env=')) {
+        $envFile = substr($arg, 6);
+    }
+}
+$envPath = str_starts_with($envFile, '/') ? dirname($envFile) : __DIR__;
+$envName = basename($envFile);
+Dotenv::createImmutable($envPath, $envName)->safeLoad();
 
 function env_val(string $key, $default = null)
 {

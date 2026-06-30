@@ -45,40 +45,52 @@
             <tr>
                 <th>Device ID</th>
                 <th>Nama Device</th>
+                <th>Tipe</th>
                 <th>Status</th>
                 <th>Last Seen</th>
                 <th>Update Time</th>
+                <th></th>
             </tr>
         </thead>
         <tbody>
             @forelse ($devices as $device)
-                <tr>
+                <tr id="device-row-{{ $device->id }}">
                     <td style="font-family: monospace; font-weight: 700;">{{ $device->device_id }}</td>
                     <td>{{ $device->name }}</td>
+                    <td style="font-size:0.8rem; color:#6b7280;">
+                        {{ $device->type === 'zkteco' ? 'ZKTeco' : 'Custom IoT' }}
+                        @if ($device->type === 'zkteco' && $device->ip_address)
+                            <div style="font-family:monospace; font-size:0.72rem;">{{ $device->ip_address }}:{{ $device->port ?: 4370 }}</div>
+                        @endif
+                    </td>
                     @php
-                        $bg = '#EEF0F3';
-                        $text = '#6b7280';
-
-                        if ($device->computed_status === 'online') {
-                            $bg = '#E6F6EC';
-                            $text = '#1DB173';
-                        } elseif ($device->computed_status === 'stale') {
-                            $bg = '#FEF3C7';
-                            $text = '#B45309';
-                        } elseif ($device->computed_status === 'disabled') {
-                            $bg = '#FADBD8';
-                            $text = '#BA1A1A';
-                        }
+                        $bg = '#EEF0F3'; $text = '#6b7280';
+                        if ($device->computed_status === 'online')    { $bg = '#E6F6EC'; $text = '#1DB173'; }
+                        elseif ($device->computed_status === 'stale') { $bg = '#FEF3C7'; $text = '#B45309'; }
+                        elseif ($device->computed_status === 'offline'){ $bg = '#FDECEC'; $text = '#BA1A1A'; }
+                        elseif ($device->computed_status === 'disabled'){ $bg = '#FADBD8'; $text = '#BA1A1A'; }
                     @endphp
-                    <td><span class="status-pill" style="background: {{ $bg }}; color: {{ $text }};">
-                        {{ $device->computed_status_label }}
-                    </span></td>
+                    <td>
+                        <span class="status-pill device-status-pill-{{ $device->id }}" style="background: {{ $bg }}; color: {{ $text }};">
+                            {{ $device->computed_status_label }}
+                        </span>
+                    </td>
                     <td style="font-size: 0.85rem; color: #6b7280;">{{ $device->last_seen_at?->diffForHumans() ?? '-' }}</td>
                     <td style="font-size: 0.85rem; color: #6b7280;">{{ $device->updated_at?->format('d M Y H:i:s') ?? '-' }}</td>
+                    <td>
+                        @if ($device->type === 'zkteco' && $device->ip_address && $device->is_active)
+                            <button
+                                class="zk-ping-btn"
+                                onclick="pingDevice({{ $device->id }})"
+                                style="border:none; background:#eef2ff; color:#4338ca; border-radius:6px; padding:0.3rem 0.6rem; font-size:0.72rem; font-weight:600; cursor:pointer; white-space:nowrap;">
+                                <i class="fas fa-circle-dot" id="ping-icon-{{ $device->id }}"></i> Cek
+                            </button>
+                        @endif
+                    </td>
                 </tr>
             @empty
                 <tr>
-                    <td colspan="5" style="text-align: center; color: #6b7280; padding: 2rem;">Belum ada device yang terdaftar</td>
+                    <td colspan="7" style="text-align: center; color: #6b7280; padding: 2rem;">Belum ada device yang terdaftar</td>
                 </tr>
             @endforelse
         </tbody>
@@ -107,4 +119,44 @@
         @endforelse
     </div>
 </div>
+
 @endsection
+
+@push('scripts')
+<script>
+const HEALTH_CSRF = '{{ csrf_token() }}';
+
+const STATUS_STYLE = {
+    online:   { bg: '#E6F6EC', text: '#1DB173' },
+    offline:  { bg: '#FDECEC', text: '#BA1A1A' },
+    stale:    { bg: '#FEF3C7', text: '#B45309' },
+    disabled: { bg: '#FADBD8', text: '#BA1A1A' },
+    unknown:  { bg: '#EEF0F3', text: '#6b7280' },
+};
+
+async function pingDevice(deviceId) {
+    const icon = document.getElementById('ping-icon-' + deviceId);
+    const pill = document.querySelector('.device-status-pill-' + deviceId);
+    if (!icon || !pill) return;
+
+    icon.className = 'fas fa-spinner fa-spin';
+
+    try {
+        const res  = await fetch('/monitoring/health/ping/' + deviceId, {
+            method: 'POST',
+            headers: { 'X-CSRF-TOKEN': HEALTH_CSRF, 'Accept': 'application/json' },
+        });
+        const data = await res.json();
+
+        const s = STATUS_STYLE[data.status] || STATUS_STYLE.unknown;
+        pill.style.background = s.bg;
+        pill.style.color      = s.text;
+        pill.textContent      = data.label;
+    } catch (e) {
+        pill.textContent = 'Error';
+    }
+
+    icon.className = 'fas fa-circle-dot';
+}
+</script>
+@endpush

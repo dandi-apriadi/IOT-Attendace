@@ -65,6 +65,150 @@ class DeviceController extends Controller
         return redirect()->route('devices.index')->with('success', $message);
     }
 
+    /**
+     * Memindai subnet lokal untuk menemukan perangkat yang terhubung.
+     * Mencari port 4370 (ZKTeco) dan port 80/8080 (Custom IoT HTTP).
+     */
+    public function scan(Request $request): JsonResponse
+    {
+        set_time_limit(30);
+
+        $localIp = $this->detectLocalIp();
+        if ($localIp === null) {
+            return response()->json(['ok' => false, 'message' => 'Tidak dapat mendeteksi IP lokal server.']);
+        }
+
+        $parts = explode('.', $localIp);
+        array_pop($parts);
+        $subnet = implode('.', $parts);
+
+        $registeredIps = Device::whereNotNull('ip_address')->pluck('ip_address')->flip()->all();
+
+        $zkFound   = $this->portScan($subnet, 4370, 400);
+        $httpFound = $this->portScan($subnet, 80,   300);
+        $http8080  = $this->portScan($subnet, 8080, 300);
+
+        // Deduplicate http results, prefer port 80 over 8080
+        $httpIps = array_merge($httpFound, array_diff($http8080, $httpFound));
+
+        // ZKTeco IPs take precedence — don't also list them as custom_iot
+        $zkIps = $zkFound;
+        $httpOnlyIps = array_diff($httpIps, $zkIps);
+
+        $results = [];
+
+        foreach ($zkIps as $ip) {
+            $entry = [
+                'ip'   => $ip,
+                'port' => 4370,
+                'type' => 'zkteco',
+                'label' => null,
+                'serial' => null,
+                'already_registered' => isset($registeredIps[$ip]),
+            ];
+            // Probe device info (quick — connection already proved open)
+            try {
+                $info = ZktecoService::fromAddress($ip, 4370)->getInfo();
+                $entry['label']  = $info['device_name'] ?? null;
+                $entry['serial'] = $info['serial_number'] ?? null;
+            } catch (\Throwable) {}
+            $results[] = $entry;
+        }
+
+        foreach ($httpOnlyIps as $ip) {
+            $port = in_array($ip, $httpFound, true) ? 80 : 8080;
+            $results[] = [
+                'ip'   => $ip,
+                'port' => $port,
+                'type' => 'custom_iot',
+                'label' => null,
+                'serial' => null,
+                'already_registered' => isset($registeredIps[$ip]),
+            ];
+        }
+
+        return response()->json([
+            'ok'       => true,
+            'subnet'   => $subnet . '.0/24',
+            'local_ip' => $localIp,
+            'found'    => $results,
+        ]);
+    }
+
+    /**
+     * Pindai satu port di seluruh /24 subnet menggunakan non-blocking TCP connect.
+     * @return string[]
+     */
+    private function portScan(string $subnet, int $port, int $waitMs): array
+    {
+        /** @var array<string, resource> $streams */
+        $streams = [];
+        /** @var array<int, string> $ipByHandle */
+        $ipByHandle = [];
+
+        for ($i = 1; $i <= 254; $i++) {
+            $ip = "{$subnet}.{$i}";
+            $s = @stream_socket_client(
+                "tcp://{$ip}:{$port}",
+                $errno, $errstr,
+                0,
+                STREAM_CLIENT_ASYNC_CONNECT | STREAM_CLIENT_CONNECT
+            );
+            if ($s !== false) {
+                stream_set_blocking($s, false);
+                $streams[$ip]          = $s;
+                $ipByHandle[(int) $s]  = $ip;
+            }
+        }
+
+        if (empty($streams)) {
+            return [];
+        }
+
+        usleep($waitMs * 1_000);
+
+        $write  = array_values($streams);
+        $read   = null;
+        $except = null;
+        @stream_select($read, $write, $except, 0, 0);
+
+        $found = [];
+        foreach ($write ?? [] as $s) {
+            $ip = $ipByHandle[(int) $s] ?? null;
+            if ($ip !== null) {
+                $found[] = $ip;
+            }
+        }
+
+        foreach ($streams as $s) {
+            @fclose($s);
+        }
+
+        return $found;
+    }
+
+    private function detectLocalIp(): ?string
+    {
+        if (PHP_OS_FAMILY === 'Linux') {
+            $out = @shell_exec("ip route get 8.8.8.8 2>/dev/null | grep -oP 'src \\K[\\d.]+'");
+            if ($out && filter_var(trim($out), FILTER_VALIDATE_IP)) {
+                return trim($out);
+            }
+        }
+
+        // Fallback: UDP trick — no packet actually sent
+        $sock = @socket_create(AF_INET, SOCK_DGRAM, SOL_UDP);
+        if ($sock === false) {
+            return null;
+        }
+        @socket_connect($sock, '8.8.8.8', 80);
+        $addr = '';
+        @socket_getsockname($sock, $addr);
+        socket_close($sock);
+
+        return filter_var($addr, FILTER_VALIDATE_IP) ? $addr : null;
+    }
+
     public function edit(string $id): View
     {
         $device = Device::findOrFail($id);
@@ -332,10 +476,26 @@ class DeviceController extends Controller
 
         return view('master.devices-users', [
             'device' => $device,
-            'deviceUsers' => $deviceUsers,
-            'error' => $error,
             'kelasList' => Kelas::orderBy('nama_kelas')->get(),
         ]);
+    }
+
+    /**
+     * Endpoint JSON untuk mengambil daftar user dari perangkat (dipanggil via fetch).
+     */
+    public function usersData(Device $device): JsonResponse
+    {
+        if (! $this->isZkteco($device)) {
+            return response()->json(['ok' => false, 'message' => 'Perangkat ini bukan tipe ZKTeco.'], 422);
+        }
+
+        try {
+            $users = (new ZktecoService($device))->pullUsers();
+
+            return response()->json(['ok' => true, 'users' => $users]);
+        } catch (\Throwable $e) {
+            return response()->json(['ok' => false, 'message' => $e->getMessage()]);
+        }
     }
 
     /**
@@ -489,9 +649,13 @@ class DeviceController extends Controller
     /**
      * Menghapus satu user dari perangkat.
      */
-    public function removeUser(Request $request, Device $device): RedirectResponse
+    public function removeUser(Request $request, Device $device): JsonResponse|RedirectResponse
     {
         if (! $this->isZkteco($device)) {
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => 'Perangkat ini bukan tipe ZKTeco.'], 422);
+            }
+
             return back()->with('error', 'Perangkat ini bukan tipe ZKTeco.');
         }
 
@@ -522,8 +686,16 @@ class DeviceController extends Controller
                 $request->user()?->id
             );
 
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => true, 'message' => "User uid {$validated['uid']} berhasil dihapus."]);
+            }
+
             return back()->with('success', "User uid {$validated['uid']} berhasil dihapus dari perangkat.");
         } catch (\Throwable $e) {
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => 'Gagal menghapus user: ' . $e->getMessage()]);
+            }
+
             return back()->with('error', 'Gagal menghapus user: ' . $e->getMessage());
         }
     }
