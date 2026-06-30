@@ -103,7 +103,8 @@ class DeviceManagementAgentTest extends TestCase
 
         $this->actingAs($this->admin)
             ->get("/master/devices/{$device->id}/users")
-            ->assertOk();
+            ->assertOk()
+            ->assertSee('Cari User');
 
         $this->assertDatabaseCount('device_commands', 0);
     }

@@ -83,8 +83,22 @@
 
     <!-- Data table -->
     <div id="stateData" style="display:none;">
-        <div style="font-size:0.85rem; color:#6b7280; margin-bottom:1rem;">
-            Total <strong id="totalCount">0</strong> user di perangkat
+        <div class="device-users-toolbar">
+            <div style="font-size:0.85rem; color:#6b7280;">
+                Menampilkan <strong id="visibleCount">0</strong> dari <strong id="totalCount">0</strong> user di perangkat
+            </div>
+            <form id="userSearchForm" class="device-users-search" onsubmit="applyUserSearch(); return false;">
+                <div class="device-users-search-box">
+                    <i class="fas fa-search" aria-hidden="true"></i>
+                    <input id="userSearchInput" type="search" placeholder="Cari UID, NIM, atau nama user..." autocomplete="off">
+                </div>
+                <button type="submit" class="btn-kinetic device-users-search-btn">
+                    <i class="fas fa-magnifying-glass"></i> Cari User
+                </button>
+                <button id="btnClearSearch" type="button" class="btn-kinetic device-users-clear-btn" onclick="clearUserSearch()" style="display:none;">
+                    <i class="fas fa-xmark"></i> Reset
+                </button>
+            </form>
         </div>
         <div style="overflow-x:auto;">
             <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
@@ -106,6 +120,76 @@
 
 <style>
 @keyframes spin { to { transform: rotate(360deg); } }
+.device-users-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+.device-users-search {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1 1 420px;
+    justify-content: flex-end;
+}
+.device-users-search-box {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-width: 240px;
+    max-width: 420px;
+    flex: 1 1 260px;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 0 0.75rem;
+    color: #64748b;
+}
+.device-users-search-box input {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    padding: 0.72rem 0;
+    color: var(--text-primary);
+    font-size: 0.82rem;
+}
+.device-users-search-btn,
+.device-users-clear-btn {
+    box-shadow: none;
+    border: 0;
+    cursor: pointer;
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+.device-users-search-btn {
+    background: #e0f2fe;
+    color: #075985;
+}
+.device-users-clear-btn {
+    background: #f1f3f5;
+    color: var(--text-primary);
+}
+@media (max-width: 720px) {
+    .device-users-toolbar,
+    .device-users-search {
+        align-items: stretch;
+    }
+    .device-users-search,
+    .device-users-search-box,
+    .device-users-search-btn,
+    .device-users-clear-btn {
+        width: 100%;
+        max-width: none;
+    }
+    .device-users-search {
+        justify-content: stretch;
+    }
+}
 </style>
 
 @push('scripts')
@@ -116,6 +200,7 @@ const REMOVE_URL  = '{{ route('devices.remove-user', $device->id) }}';
 const ZK_CSRF     = '{{ csrf_token() }}';
 const POLL_INTERVAL_MS = 1500;
 const POLL_MAX_ATTEMPTS = 80;
+let allDeviceUsers = [];
 
 function show(id) {
     ['stateLoading','stateError','stateData'].forEach(s => {
@@ -187,18 +272,57 @@ async function loadUsers(refresh = true) {
 }
 
 function renderUsers(users) {
-    const tbody    = document.getElementById('usersTableBody');
-    const unmatched = users.filter(u => !u.matched).length;
+    allDeviceUsers = Array.isArray(users) ? users : [];
+    applyUserSearch();
+}
 
-    document.getElementById('totalCount').textContent = users.length;
+function applyUserSearch() {
+    const query = document.getElementById('userSearchInput').value.trim().toLowerCase();
+    const filtered = query === ''
+        ? allDeviceUsers
+        : allDeviceUsers.filter(userMatchesSearch(query));
+
+    renderUserRows(filtered, query);
+    document.getElementById('btnClearSearch').style.display = query === '' ? 'none' : 'inline-flex';
+}
+
+function clearUserSearch() {
+    document.getElementById('userSearchInput').value = '';
+    applyUserSearch();
+}
+
+function userMatchesSearch(query) {
+    return function (u) {
+        return [
+            u.uid,
+            u.userid,
+            u.name,
+            u.mahasiswa_nama,
+            u.role === 14 ? 'admin' : 'user',
+            u.matched ? 'terdaftar' : 'belum terdaftar',
+        ].some(value => String(value ?? '').toLowerCase().includes(query));
+    };
+}
+
+function renderUserRows(users, query = '') {
+    const tbody    = document.getElementById('usersTableBody');
+    const unmatched = allDeviceUsers.filter(u => !u.matched).length;
+
+    document.getElementById('visibleCount').textContent = users.length;
+    document.getElementById('totalCount').textContent = allDeviceUsers.length;
 
     if (unmatched > 0) {
         document.getElementById('importCount').textContent = unmatched + ' user belum terdaftar';
         document.getElementById('importBar').style.display = 'flex';
+    } else {
+        document.getElementById('importBar').style.display = 'none';
     }
 
     if (users.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="padding:2rem; text-align:center; color:#6b7280;">Tidak ada user di perangkat.</td></tr>';
+        const emptyText = allDeviceUsers.length > 0 && query !== ''
+            ? 'Tidak ada user yang cocok dengan pencarian.'
+            : 'Tidak ada user di perangkat.';
+        tbody.innerHTML = `<tr><td colspan="6" style="padding:2rem; text-align:center; color:#6b7280;">${emptyText}</td></tr>`;
         return;
     }
 
