@@ -319,7 +319,12 @@
         });
     });
 
+    let liveStreamInFlight = false;
     async function refreshLiveStream() {
+        if (liveStreamInFlight) {
+            return;
+        }
+        liveStreamInFlight = true;
         try {
             const query = new URLSearchParams({ date: selectedDate });
             if (selectedJadwalId) {
@@ -382,9 +387,13 @@
                 : '<tr><td colspan="6" style="text-align: center; padding: 2rem; color: #6b7280;">Belum ada data</td></tr>';
         } catch (error) {
             // Keep silent in UI to avoid interrupting monitoring screen.
+        } finally {
+            liveStreamInFlight = false;
         }
     }
 
-    setInterval(refreshLiveStream, 10000);
+    // Refresh immediately on load so the table doesn't sit stale, then poll.
+    refreshLiveStream();
+    setInterval(refreshLiveStream, 4000);
 </script>
 @endsection

@@ -142,7 +142,7 @@ class MonitoringLiveController extends Controller
         $attendanceSessions = $this->attendanceSessions();
         $cacheKey = $attendanceSessions->livePayloadCacheKey($selectedDate, $selectedJadwalId);
 
-        return Cache::remember($cacheKey, now()->addSeconds(5), function () use ($selectedDate, $selectedJadwalId, $attendanceSessions): array {
+        return Cache::remember($cacheKey, now()->addSeconds(2), function () use ($selectedDate, $selectedJadwalId, $attendanceSessions): array {
             $now = now();
             $selectedDateCarbon = Carbon::parse($selectedDate);
             $dayNames = $attendanceSessions->dayNames($selectedDateCarbon);
