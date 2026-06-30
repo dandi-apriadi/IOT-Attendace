@@ -23,6 +23,9 @@ class AttendanceSessionService
         $time = $now->toTimeString();
         $manualSessions = $this->activeSessions();
 
+        // Out-of-window manual session kept as last-resort (e.g. early-open or makeup session).
+        $outOfWindowFallback = null;
+
         if ($allowManualSession) {
             foreach ($manualSessions as $manualSession) {
                 if ((int) ($manualSession['kelas_id'] ?? 0) !== (int) $mahasiswa->kelas_id) {
@@ -31,12 +34,21 @@ class AttendanceSessionService
 
                 $manualJadwal = $this->manualSessionSchedule($manualSession, $date);
 
-                if ($manualJadwal) {
+                if (! $manualJadwal) {
+                    continue;
+                }
+
+                // Sessions whose time window currently contains $time take priority.
+                // Out-of-window sessions (a previous class still lingering in cache)
+                // are skipped here so they don't shadow the correct current course.
+                if ($manualJadwal->jam_mulai <= $time && $time <= $manualJadwal->jam_selesai) {
                     return [
                         'jadwal' => $manualJadwal,
                         'baseline_time' => $manualJadwal->jam_mulai,
                     ];
                 }
+
+                $outOfWindowFallback ??= $manualJadwal;
             }
         }
 
@@ -52,14 +64,23 @@ class AttendanceSessionService
             })
             ->first();
 
-        if (! $autoJadwal) {
-            return null;
+        if ($autoJadwal) {
+            return [
+                'jadwal' => $autoJadwal,
+                'baseline_time' => $autoJadwal->jam_mulai,
+            ];
         }
 
-        return [
-            'jadwal' => $autoJadwal,
-            'baseline_time' => $autoJadwal->jam_mulai,
-        ];
+        // No scheduled class active right now: fall back to an out-of-window manual session.
+        // This covers early-open (dosen opened before jam_mulai) and makeup sessions.
+        if ($outOfWindowFallback !== null) {
+            return [
+                'jadwal' => $outOfWindowFallback,
+                'baseline_time' => $outOfWindowFallback->jam_mulai,
+            ];
+        }
+
+        return null;
     }
 
     /**
