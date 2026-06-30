@@ -218,7 +218,11 @@ class DeviceCommandService
 
         $dosenUpdated = $this->applyDosenBiometricsFromUsers($users);
 
-        if ((int) ($studentResult['fingerprint_updated'] ?? 0) > 0 || $dosenUpdated > 0) {
+        // Only push to devices when dosen fingerprints change. Student fingerprints were just
+        // READ from the device, so pushing them back is circular and risks deletion:
+        // Fingerprint::set removes the existing finger before re-writing it, so if the
+        // subsequent _setFinger call fails (UDP drop, device busy), the finger is gone.
+        if ($dosenUpdated > 0) {
             $this->enqueueAllActiveZktecoUserSyncs($command->requested_by);
         }
     }
@@ -327,7 +331,14 @@ class DeviceCommandService
             $updates['rfid_uid'] = (string) $result['cardno'];
         }
         if (in_array($method, ['fingerprint', 'rfid_fingerprint'], true) && ! empty($result['has_fingerprint'])) {
-            $updates['fingerprint_data'] = $marker;
+            // Preserve existing JSON template data — only write the marker when there is
+            // no real template stored yet. Overwriting JSON with a marker would erase the
+            // previously captured finger templates from the database.
+            $existingFp = $mahasiswa->fingerprint_data;
+            $hasJsonTemplate = is_string($existingFp) && is_array(json_decode($existingFp, true));
+            if (! $hasJsonTemplate) {
+                $updates['fingerprint_data'] = $marker;
+            }
         }
 
         if ($updates !== []) {

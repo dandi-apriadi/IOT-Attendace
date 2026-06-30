@@ -273,7 +273,14 @@ class MahasiswaController extends Controller
             if (in_array($method, ['fingerprint', 'rfid_fingerprint'], true)) {
                 $requestedLabels[] = 'Sidik Jari';
                 if ($data['has_fingerprint']) {
-                    $updates['fingerprint_data'] = 'enrolled@' . $device->device_id;
+                    // Only write the marker when there is no real JSON template already
+                    // stored. Overwriting a JSON template with a plain marker string would
+                    // erase previously captured finger data from the database.
+                    $existingFp = $mahasiswa->fingerprint_data;
+                    $hasJsonTemplate = is_string($existingFp) && is_array(json_decode($existingFp, true));
+                    if (! $hasJsonTemplate) {
+                        $updates['fingerprint_data'] = 'enrolled@' . $device->device_id;
+                    }
                 }
             }
 

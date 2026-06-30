@@ -437,9 +437,23 @@ class ZktecoService
 
             $hasFingerprint = $fingerprintResolver ? (bool) $fingerprintResolver($uid) : false;
             if ($hasFingerprint) {
-                $fingerprintPayload = $this->normalizeStoredFingerprintPayload($user['fingerprint_data'] ?? null);
-                $storedFingerprint = $fingerprintPayload !== []
-                    ? json_encode($fingerprintPayload, JSON_UNESCAPED_SLASHES)
+                $newPayload = $this->normalizeStoredFingerprintPayload($user['fingerprint_data'] ?? null);
+
+                // Merge with existing DB data so that fingers not returned by this read
+                // (e.g. due to UDP packet loss) are preserved rather than silently dropped.
+                // New data wins for the same finger IDs; missing fingers keep their old template.
+                $existingJson = (string) ($mahasiswa->fingerprint_data ?? '');
+                $existingPayload = [];
+                if ($existingJson !== '') {
+                    $decoded = json_decode($existingJson, true);
+                    if (is_array($decoded)) {
+                        $existingPayload = $decoded;
+                    }
+                }
+                $mergedPayload = array_merge($existingPayload, $newPayload);
+
+                $storedFingerprint = $mergedPayload !== []
+                    ? json_encode($mergedPayload, JSON_UNESCAPED_SLASHES)
                     : $fingerprintMarker;
 
                 if ((string) $mahasiswa->fingerprint_data !== (string) $storedFingerprint) {
