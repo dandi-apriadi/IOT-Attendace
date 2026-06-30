@@ -9,6 +9,7 @@ use App\Models\Mahasiswa;
 use App\Models\User;
 use App\Services\DeviceCommandService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
 use Jmrashed\Zkteco\Lib\ZKTeco;
 use Tests\TestCase;
 
@@ -419,6 +420,65 @@ class DeviceManagementAgentTest extends TestCase
         $this->assertSame('setFingerprint', $zk->calls[1][0]);
         $this->assertSame(1, $result['pushed']);
         $this->assertSame(1, $result['fingerprints']);
+    }
+
+    public function test_server_auto_sync_biometrics_queues_pull_for_online_zkteco_devices_only(): void
+    {
+        config(['agent.biometric_auto_sync_online_minutes' => 10]);
+
+        $online = $this->createDevice([
+            'device_id' => 'ZKTECO-X609-01',
+            'last_seen_at' => now()->subMinutes(2),
+        ]);
+        $this->createDevice([
+            'device_id' => 'ZKTECO-X609-02',
+            'ip_address' => '192.168.0.11',
+            'last_seen_at' => now()->subMinutes(30),
+        ]);
+        $this->createDevice([
+            'device_id' => 'ROOM-101',
+            'type' => 'custom_iot',
+            'ip_address' => null,
+            'last_seen_at' => now(),
+        ]);
+
+        $exitCode = Artisan::call('zkteco:auto-sync-biometrics');
+
+        $this->assertSame(0, $exitCode);
+        $this->assertDatabaseHas('device_commands', [
+            'device_id' => $online->id,
+            'type' => 'pull_biometrics',
+            'status' => 'queued',
+        ]);
+        $this->assertDatabaseCount('device_commands', 1);
+    }
+
+    public function test_auto_sync_biometrics_does_not_duplicate_pending_pull_commands(): void
+    {
+        $device = $this->createDevice(['last_seen_at' => now()]);
+
+        DeviceCommand::create([
+            'device_id' => $device->id,
+            'type' => 'pull_biometrics',
+            'status' => 'queued',
+        ]);
+
+        Artisan::call('zkteco:auto-sync-biometrics');
+
+        $this->assertSame(1, DeviceCommand::query()
+            ->where('device_id', $device->id)
+            ->where('type', 'pull_biometrics')
+            ->count());
+    }
+
+    public function test_auto_sync_biometrics_is_server_only(): void
+    {
+        config(['agent.role' => 'standalone']);
+        $this->createDevice(['last_seen_at' => now()]);
+
+        Artisan::call('zkteco:auto-sync-biometrics');
+
+        $this->assertDatabaseCount('device_commands', 0);
     }
 
     private function createDevice(array $overrides = []): Device

@@ -50,4 +50,18 @@ return [
 
     'command_max_dispatch_attempts' => (int) env('AGENT_COMMAND_MAX_ATTEMPTS', 3),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Auto Sync Biometrik ZKTeco
+    |--------------------------------------------------------------------------
+    |
+    | Pada mode server, VPS akan mengantrekan pull_biometrics secara berkala
+    | untuk alat ZKTeco yang agent-nya baru terlihat online. Hasil pull akan
+    | dipakai untuk memperbarui database lalu dipush ke seluruh alat aktif.
+    |
+    */
+
+    'biometric_auto_sync_enabled' => env('AGENT_BIOMETRIC_AUTO_SYNC_ENABLED', true),
+    'biometric_auto_sync_online_minutes' => (int) env('AGENT_BIOMETRIC_AUTO_SYNC_ONLINE_MINUTES', 10),
+
 ];

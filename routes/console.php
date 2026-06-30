@@ -20,6 +20,15 @@ if (config('agent.role') === 'standalone') {
         ->appendOutputTo(storage_path('logs/zkteco-pull.log'));
 }
 
+// Di VPS, biometrik ditarik lewat agent lokal secara otomatis. Agent akan
+// mengeksekusi pull_biometrics dan hasilnya dipakai untuk sync lintas alat.
+if (config('agent.role') === 'server') {
+    Schedule::command('zkteco:auto-sync-biometrics')
+        ->everyFifteenMinutes()
+        ->withoutOverlapping()
+        ->appendOutputTo(storage_path('logs/zkteco-biometric-auto-sync.log'));
+}
+
 Schedule::command('students:promote-semester --execute --due-only')
     ->dailyAt('00:30')
     ->withoutOverlapping()
