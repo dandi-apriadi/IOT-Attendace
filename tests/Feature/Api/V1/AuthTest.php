@@ -46,6 +46,28 @@ class AuthTest extends TestCase
         $response->assertStatus(422)->assertJsonValidationErrors(['email']);
     }
 
+    public function test_login_validation_stays_json_without_accept_header(): void
+    {
+        $response = $this->withHeaders([
+            'Accept' => '*/*',
+            'Content-Type' => 'application/json',
+        ])->post('/api/v1/login', []);
+
+        $response->assertStatus(422)
+            ->assertHeader('content-type', 'application/json')
+            ->assertJsonValidationErrors(['email', 'password']);
+    }
+
+    public function test_protected_endpoint_stays_json_without_accept_header(): void
+    {
+        $response = $this->withHeaders([
+            'Accept' => '*/*',
+        ])->get('/api/v1/me');
+
+        $response->assertStatus(401)
+            ->assertHeader('content-type', 'application/json');
+    }
+
     public function test_endpoint_terproteksi_menolak_tanpa_token(): void
     {
         $this->getJson('/api/v1/me')->assertStatus(401);

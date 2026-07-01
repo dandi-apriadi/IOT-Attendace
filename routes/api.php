@@ -37,7 +37,7 @@ Route::prefix('agent')->middleware(['device.token', 'throttle:120,1'])->group(fu
 
 // API mobile (aplikasi Flutter monitoring) — auth via Sanctum token, terpisah
 // dari device-token API di atas yang dipakai alat IoT.
-Route::prefix('v1')->group(function () {
+Route::prefix('v1')->middleware('api.json')->group(function () {
 	Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
 
 	Route::middleware(['auth:sanctum', 'role:admin,dosen', 'throttle:60,1'])->group(function () {
