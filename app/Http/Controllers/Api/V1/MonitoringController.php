@@ -9,8 +9,10 @@ use App\Http\Resources\DeviceResource;
 use App\Models\Absensi;
 use App\Models\Device;
 use App\Models\Jadwal;
+use App\Models\MataKuliahDosenAssignment;
 use App\Models\SemesterAkademik;
 use App\Services\AttendanceSessionService;
+use App\Services\DashboardChartService;
 use App\Services\DeviceCommandService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -21,8 +23,10 @@ class MonitoringController extends Controller
 {
     use ScopesByDosen;
 
-    public function __construct(private readonly AttendanceSessionService $attendanceSessions)
-    {
+    public function __construct(
+        private readonly AttendanceSessionService $attendanceSessions,
+        private readonly DashboardChartService $charts
+    ) {
     }
 
     public function live(Request $request): JsonResponse
@@ -43,29 +47,7 @@ class MonitoringController extends Controller
 
     public function devices(Request $request): JsonResponse
     {
-        $onlineThreshold = now()->subMinutes(5);
-
-        $devices = Device::query()
-            ->orderByDesc('is_active')
-            ->orderByDesc('last_seen_at')
-            ->get()
-            ->map(function (Device $device) use ($onlineThreshold): Device {
-                if (! $device->is_active) {
-                    $device->computed_status = 'disabled';
-                    $device->computed_status_label = 'Disabled';
-                } elseif ($device->last_seen_at && $device->last_seen_at->gte($onlineThreshold)) {
-                    $device->computed_status = 'online';
-                    $device->computed_status_label = 'Online';
-                } elseif ($device->last_seen_at) {
-                    $device->computed_status = 'stale';
-                    $device->computed_status_label = 'Stale';
-                } else {
-                    $device->computed_status = 'unknown';
-                    $device->computed_status_label = 'Unknown';
-                }
-
-                return $device;
-            });
+        $devices = $this->devicesWithComputedStatus();
 
         return response()->json([
             'data' => DeviceResource::collection($devices),
@@ -144,9 +126,9 @@ class MonitoringController extends Controller
     public function dashboardSummary(Request $request): JsonResponse
     {
         $user = $request->user();
-        $cacheKey = sprintf('mobile:dashboard:summary:%s:%d', $user->role, $user->id);
+        $cacheKey = sprintf('mobile:dashboard:summary:v2:%s:%d', $user->role, $user->id);
 
-        $payload = Cache::remember($cacheKey, 30, function () use ($request) {
+        $payload = Cache::remember($cacheKey, 30, function () use ($request, $user) {
             $now = Carbon::now();
             $today = $now->copy()->startOfDay();
             $timeNow = $now->format('H:i:s');
@@ -159,10 +141,14 @@ class MonitoringController extends Controller
                 ->where('jam_mulai', '<=', $timeNow)
                 ->where('jam_selesai', '>=', $timeNow);
 
+            $latestAbsensiQuery = Absensi::query()
+                ->with(['mahasiswa:id,nama,nim', 'jadwal:id,kelas_id,mata_kuliah_id', 'jadwal.kelas:id,nama_kelas', 'jadwal.mata_kuliah:id,kode_mk,nama_mk']);
+
             if ($allowedMataKuliahIds !== null) {
                 $scopedJadwalIds = Jadwal::whereIn('mata_kuliah_id', $allowedMataKuliahIds)->pluck('id');
                 $hadirHariIniQuery->whereIn('jadwal_id', $scopedJadwalIds);
                 $sesiAktifQuery->whereIn('mata_kuliah_id', $allowedMataKuliahIds);
+                $latestAbsensiQuery->whereIn('jadwal_id', $scopedJadwalIds);
             }
 
             $activeSemester = SemesterAkademik::query()
@@ -170,7 +156,36 @@ class MonitoringController extends Controller
                 ->orderByDesc('tanggal_mulai')
                 ->first();
 
-            return [
+            $latestAbsensi = $latestAbsensiQuery
+                ->orderByDesc('tanggal')
+                ->orderByDesc('waktu_tap')
+                ->limit(10)
+                ->get()
+                ->map(fn (Absensi $item): array => [
+                    'id' => $item->id,
+                    'mahasiswa_nama' => $item->mahasiswa?->nama ?? 'N/A',
+                    'mahasiswa_nim' => $item->mahasiswa?->nim ?? 'N/A',
+                    'mata_kuliah_nama' => $item->jadwal?->mata_kuliah?->nama_mk ?? 'N/A',
+                    'kelas_name' => $item->jadwal?->kelas?->nama_kelas ?? 'N/A',
+                    'waktu_tap' => $item->waktu_tap ? substr((string) $item->waktu_tap, 0, 5) : null,
+                    'tanggal' => (string) $item->tanggal,
+                    'status' => $item->status,
+                ])
+                ->values();
+
+            $recentDevices = $this->devicesWithComputedStatus(5)
+                ->map(fn (Device $device): array => [
+                    'id' => $device->id,
+                    'device_id' => $device->device_id,
+                    'name' => $device->name,
+                    'is_active' => (bool) $device->is_active,
+                    'last_seen_at' => optional($device->last_seen_at)->toIso8601String(),
+                    'status' => $device->computed_status,
+                    'status_label' => $device->computed_status_label,
+                ])
+                ->values();
+
+            $payload = [
                 'hadir_hari_ini' => $hadirHariIniQuery->count(),
                 'sesi_aktif' => $sesiAktifQuery->count(),
                 'device_aktif' => Device::where('is_active', true)->count(),
@@ -179,10 +194,58 @@ class MonitoringController extends Controller
                     ->count(),
                 'semester_aktif' => $activeSemester?->nama_semester,
                 'generated_at' => $now->toIso8601String(),
+                'latest_absensi' => $latestAbsensi,
+                'recent_devices' => $recentDevices,
             ];
+
+            if ($user->role === 'admin') {
+                $payload['weekly_chart'] = $this->charts->buildAdminWeeklyChart($today);
+                $payload['iot_chart'] = $this->charts->buildAdminIotChart($now);
+            }
+
+            if ($user->role === 'dosen') {
+                $payload['dosen_class_chart'] = $this->charts->buildDosenClassParticipationChart($user->id, $now);
+                $payload['dosen_course_chart'] = $this->charts->buildDosenCoursePerformanceChart($user->id, $now);
+                $payload['dosen_schedule_count'] = $allowedMataKuliahIds !== null && $allowedMataKuliahIds !== []
+                    ? Jadwal::whereIn('mata_kuliah_id', $allowedMataKuliahIds)->count()
+                    : 0;
+            }
+
+            return $payload;
         });
 
         return response()->json($payload);
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, Device>
+     */
+    private function devicesWithComputedStatus(?int $limit = null): \Illuminate\Support\Collection
+    {
+        $onlineThreshold = now()->subMinutes(5);
+
+        return Device::query()
+            ->orderByDesc('is_active')
+            ->orderByDesc('last_seen_at')
+            ->when($limit !== null, fn ($q) => $q->limit($limit))
+            ->get()
+            ->map(function (Device $device) use ($onlineThreshold): Device {
+                if (! $device->is_active) {
+                    $device->computed_status = 'disabled';
+                    $device->computed_status_label = 'Disabled';
+                } elseif ($device->last_seen_at && $device->last_seen_at->gte($onlineThreshold)) {
+                    $device->computed_status = 'online';
+                    $device->computed_status_label = 'Online';
+                } elseif ($device->last_seen_at) {
+                    $device->computed_status = 'stale';
+                    $device->computed_status_label = 'Stale';
+                } else {
+                    $device->computed_status = 'unknown';
+                    $device->computed_status_label = 'Unknown';
+                }
+
+                return $device;
+            });
     }
 
     private function normalizeDate(string $date): string

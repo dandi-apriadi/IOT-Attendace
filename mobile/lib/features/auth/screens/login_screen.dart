@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/storage/secure_storage_provider.dart';
+import '../../../shared/theme/app_theme.dart';
 import '../data/auth_repository.dart';
 import '../providers/auth_provider.dart';
 
@@ -111,8 +112,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Icon(Icons.monitor_heart_outlined, size: 64, color: Colors.blue),
-                  const SizedBox(height: 12),
+                  Container(
+                    width: 88,
+                    height: 88,
+                    alignment: Alignment.center,
+                    decoration: const BoxDecoration(color: AppTheme.primaryContainer, shape: BoxShape.circle),
+                    child: const Icon(Icons.monitor_heart_outlined, size: 44, color: AppTheme.primary),
+                  ),
+                  const SizedBox(height: 16),
                   Text(
                     'Login Monitoring',
                     textAlign: TextAlign.center,
@@ -141,7 +148,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                   if (_errorMessage != null) ...[
                     const SizedBox(height: 12),
-                    Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
+                    Text(_errorMessage!, style: TextStyle(color: AppTheme.statusColor('Alpa'))),
                   ],
                   const SizedBox(height: 24),
                   FilledButton(

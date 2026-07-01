@@ -56,5 +56,6 @@ Route::prefix('v1')->middleware('api.json')->group(function () {
 
 		Route::get('/audit-log', [AdminController::class, 'auditLog']);
 		Route::get('/reports/student-summary', [AdminController::class, 'studentReport']);
+		Route::get('/reports/attendance-trend', [AdminController::class, 'attendanceTrend']);
 	});
 });

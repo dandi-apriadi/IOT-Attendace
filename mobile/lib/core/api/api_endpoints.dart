@@ -17,4 +17,5 @@ class ApiEndpoints {
 
   static const auditLog = '/audit-log';
   static const studentReport = '/reports/student-summary';
+  static const attendanceTrend = '/reports/attendance-trend';
 }

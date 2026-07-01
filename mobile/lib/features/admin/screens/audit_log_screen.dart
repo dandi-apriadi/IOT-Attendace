@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../shared/theme/app_theme.dart';
 import '../../../shared/widgets/error_banner.dart';
 import '../models/audit_log_model.dart';
 import '../providers/audit_log_provider.dart';
@@ -47,11 +48,11 @@ class _AuditLogScreenState extends ConsumerState<AuditLogScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               children: [
-                _StatChip(label: 'Total', value: state.totalEvents, color: Colors.blueGrey),
+                _StatChip(label: 'Total', value: state.totalEvents, color: AppTheme.navy),
                 const SizedBox(width: 16),
-                _StatChip(label: 'Login', value: state.authEvents, color: Colors.green),
+                _StatChip(label: 'Login', value: state.authEvents, color: AppTheme.statusColor('Hadir')),
                 const SizedBox(width: 16),
-                _StatChip(label: 'Gagal', value: state.errorEvents, color: Colors.red),
+                _StatChip(label: 'Gagal', value: state.errorEvents, color: AppTheme.statusColor('Alpa')),
               ],
             ),
           ),
@@ -115,7 +116,7 @@ class _AuditLogTile extends StatelessWidget {
     return ListTile(
       leading: Icon(
         log.isError ? Icons.error_outline : Icons.check_circle_outline,
-        color: log.isError ? Colors.red : Colors.green,
+        color: log.isError ? AppTheme.statusColor('Alpa') : AppTheme.statusColor('Hadir'),
       ),
       title: Text(log.description, style: const TextStyle(fontSize: 14)),
       subtitle: Text(

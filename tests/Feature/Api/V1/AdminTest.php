@@ -95,4 +95,50 @@ class AdminTest extends TestCase
         $this->assertContains('Mhs A', $names);
         $this->assertNotContains('Mhs B', $names);
     }
+
+    public function test_attendance_trend_menghitung_per_hari_sesuai_filter(): void
+    {
+        $semester = SemesterAkademik::create([
+            'nama_semester' => 'Genap',
+            'tahun_ajaran' => '2025/2026',
+            'tanggal_mulai' => Carbon::now()->subMonth()->toDateString(),
+            'tanggal_selesai' => Carbon::now()->addMonth()->toDateString(),
+            'is_active' => true,
+        ]);
+        $kelas = Kelas::create(['nama_kelas' => 'A']);
+        $mk = MataKuliah::create(['kode_mk' => 'AAA', 'nama_mk' => 'Course A', 'sks' => 3]);
+        $dosen = User::create(['name' => 'Dosen A', 'email' => 'dosena@poltek.ac.id', 'password' => bcrypt('x'), 'role' => 'dosen']);
+        $jadwal = Jadwal::create([
+            'kelas_id' => $kelas->id, 'mata_kuliah_id' => $mk->id, 'user_id' => $dosen->id,
+            'semester_akademik_id' => $semester->id, 'hari' => 'Senin', 'jam_mulai' => '08:00:00', 'jam_selesai' => '10:00:00',
+        ]);
+        $mhs1 = Mahasiswa::create(['nim' => '1', 'nama' => 'Mhs A', 'kelas_id' => $kelas->id]);
+        $mhs2 = Mahasiswa::create(['nim' => '2', 'nama' => 'Mhs B', 'kelas_id' => $kelas->id]);
+
+        $today = Carbon::now()->toDateString();
+        $yesterday = Carbon::now()->subDay()->toDateString();
+
+        Absensi::create(['mahasiswa_id' => $mhs1->id, 'jadwal_id' => $jadwal->id, 'tanggal' => $today, 'waktu_tap' => '08:05:00', 'metode_absensi' => 'RFID', 'status' => 'Hadir']);
+        Absensi::create(['mahasiswa_id' => $mhs2->id, 'jadwal_id' => $jadwal->id, 'tanggal' => $today, 'waktu_tap' => '08:05:00', 'metode_absensi' => 'RFID', 'status' => 'Alpa']);
+        Absensi::create(['mahasiswa_id' => $mhs1->id, 'jadwal_id' => $jadwal->id, 'tanggal' => $yesterday, 'waktu_tap' => '08:05:00', 'metode_absensi' => 'RFID', 'status' => 'Hadir']);
+
+        $admin = User::create(['name' => 'Admin', 'email' => 'admin@poltek.ac.id', 'password' => bcrypt('x'), 'role' => 'admin']);
+        Sanctum::actingAs($admin, ['*']);
+
+        $response = $this->getJson(sprintf(
+            '/api/v1/reports/attendance-trend?start_date=%s&end_date=%s&kelas_id=%d',
+            $yesterday,
+            $today,
+            $kelas->id
+        ));
+
+        $response->assertStatus(200)->assertJsonPath('total', 3);
+
+        $filtered = $this->getJson(sprintf(
+            '/api/v1/reports/attendance-trend?start_date=%s&end_date=%s&status_filter=present',
+            $yesterday,
+            $today
+        ));
+        $filtered->assertStatus(200)->assertJsonPath('total', 2);
+    }
 }

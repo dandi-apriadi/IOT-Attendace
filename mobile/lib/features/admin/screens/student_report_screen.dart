@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../shared/theme/app_theme.dart';
 import '../../../shared/widgets/error_banner.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../reference/providers/reference_provider.dart';
@@ -141,9 +142,9 @@ class _StudentReportTile extends StatelessWidget {
   final StudentReportRow row;
 
   Color get _color {
-    if (row.persentase >= 80) return Colors.green;
-    if (row.persentase >= 60) return Colors.orange;
-    return Colors.red;
+    if (row.persentase >= 80) return AppTheme.statusColor('Hadir');
+    if (row.persentase >= 60) return AppTheme.statusColor('Telat');
+    return AppTheme.statusColor('Alpa');
   }
 
   @override

@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\Concerns\ScopesByDosen;
 use App\Http\Resources\AuditLogResource;
 use App\Models\AuditLog;
 use App\Models\SemesterAkademik;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -143,6 +144,94 @@ class AdminController extends Controller
                 'total' => $paginated->total(),
                 'semester' => $semester?->only(['id', 'nama_semester', 'tahun_ajaran']),
             ],
+        ]);
+    }
+
+    /**
+     * GET /api/v1/reports/attendance-trend -- admin & dosen (dosen di-scope).
+     * Rekap jumlah absensi per hari untuk rentang tanggal yang dipilih, dengan
+     * filter kelas/mata kuliah/status -- dipakai untuk chart tren di Dashboard.
+     */
+    public function attendanceTrend(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'start_date' => ['nullable', 'date'],
+            'end_date' => ['nullable', 'date'],
+            'kelas_id' => ['nullable', 'integer'],
+            'mata_kuliah_id' => ['nullable', 'integer'],
+            'status_filter' => ['nullable', 'in:present,excused,absent'],
+        ]);
+
+        $endDate = ! empty($validated['end_date'])
+            ? Carbon::parse($validated['end_date'])->startOfDay()
+            : Carbon::now()->startOfDay();
+        $startDate = ! empty($validated['start_date'])
+            ? Carbon::parse($validated['start_date'])->startOfDay()
+            : $endDate->copy()->subDays(6);
+
+        if ($startDate->gt($endDate)) {
+            [$startDate, $endDate] = [$endDate, $startDate];
+        }
+
+        // Cap the range so a mobile client can't request an unbounded scan.
+        if ($startDate->diffInDays($endDate) > 90) {
+            $startDate = $endDate->copy()->subDays(90);
+        }
+
+        $presentStatuses = array_values((array) config('attendance.absensi_present_statuses', ['Hadir']));
+        $excusedStatuses = array_values((array) config('attendance.absensi_excused_statuses', ['Sakit', 'Izin']));
+        $absentStatus = (string) config('attendance.absensi_absent_status', 'Alpa');
+
+        $query = DB::table('absensi as a')
+            ->join('jadwal as j', 'j.id', '=', 'a.jadwal_id')
+            ->whereBetween('a.tanggal', [$startDate->toDateString(), $endDate->toDateString()]);
+
+        $allowedMataKuliahIds = $this->allowedMataKuliahIds($request);
+        if ($allowedMataKuliahIds !== null) {
+            if (empty($allowedMataKuliahIds)) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->whereIn('j.mata_kuliah_id', $allowedMataKuliahIds);
+            }
+        }
+
+        if (! empty($validated['kelas_id'])) {
+            $query->where('j.kelas_id', $validated['kelas_id']);
+        }
+
+        if (! empty($validated['mata_kuliah_id'])) {
+            $query->where('j.mata_kuliah_id', $validated['mata_kuliah_id']);
+        }
+
+        if (($validated['status_filter'] ?? null) === 'present') {
+            $query->whereIn('a.status', $presentStatuses);
+        } elseif (($validated['status_filter'] ?? null) === 'excused') {
+            $query->whereIn('a.status', $excusedStatuses);
+        } elseif (($validated['status_filter'] ?? null) === 'absent') {
+            $query->where('a.status', $absentStatus);
+        }
+
+        $rows = $query
+            ->selectRaw('a.tanggal, COUNT(*) as total')
+            ->groupBy('a.tanggal')
+            ->pluck('total', 'a.tanggal');
+
+        $labels = [];
+        $data = [];
+        $cursor = $startDate->copy();
+        while ($cursor->lte($endDate)) {
+            $key = $cursor->toDateString();
+            $labels[] = $cursor->format('d/m');
+            $data[] = (int) ($rows[$key] ?? 0);
+            $cursor->addDay();
+        }
+
+        return response()->json([
+            'labels' => $labels,
+            'data' => $data,
+            'total' => array_sum($data),
+            'start_date' => $startDate->toDateString(),
+            'end_date' => $endDate->toDateString(),
         ]);
     }
 }

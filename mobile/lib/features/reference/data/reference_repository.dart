@@ -1,6 +1,7 @@
 import '../../../core/api/api_client.dart';
 import '../../../core/api/api_endpoints.dart';
 import '../models/kelas_model.dart';
+import '../models/mata_kuliah_model.dart';
 
 class ReferenceRepository {
   ReferenceRepository(this._apiClient);
@@ -12,5 +13,12 @@ class ReferenceRepository {
     final response = await dio.get(ApiEndpoints.kelas);
     final data = response.data['data'] as List<dynamic>? ?? [];
     return data.map((e) => KelasModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<List<MataKuliahModel>> fetchMataKuliah() async {
+    final dio = await _apiClient.instance();
+    final response = await dio.get(ApiEndpoints.mataKuliah);
+    final data = response.data['data'] as List<dynamic>? ?? [];
+    return data.map((e) => MataKuliahModel.fromJson(e as Map<String, dynamic>)).toList();
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../shared/theme/app_theme.dart';
 import '../../../shared/widgets/error_banner.dart';
 import '../models/device_model.dart';
 import '../providers/device_health_provider.dart';
@@ -49,10 +50,10 @@ class _MetaStrip extends StatelessWidget {
       child: Wrap(
         spacing: 16,
         children: [
-          _MetaChip(label: 'Total', value: meta['total'] ?? 0, color: Colors.blueGrey),
-          _MetaChip(label: 'Online', value: meta['online'] ?? 0, color: Colors.green),
-          _MetaChip(label: 'Offline', value: meta['offline'] ?? 0, color: Colors.red),
-          _MetaChip(label: 'Disabled', value: meta['disabled'] ?? 0, color: Colors.grey),
+          _MetaChip(label: 'Total', value: meta['total'] ?? 0, color: AppTheme.navy),
+          _MetaChip(label: 'Online', value: meta['online'] ?? 0, color: AppTheme.statusColor('online')),
+          _MetaChip(label: 'Offline', value: meta['offline'] ?? 0, color: AppTheme.statusColor('offline')),
+          _MetaChip(label: 'Disabled', value: meta['disabled'] ?? 0, color: AppTheme.statusColor('disabled')),
         ],
       ),
     );
@@ -85,14 +86,6 @@ class _DeviceList extends StatelessWidget {
   final List<DeviceModel> devices;
   final void Function(int deviceId) onPing;
 
-  static const _statusColors = {
-    'online': Colors.green,
-    'offline': Colors.red,
-    'stale': Colors.orange,
-    'disabled': Colors.grey,
-    'unknown': Colors.blueGrey,
-  };
-
   @override
   Widget build(BuildContext context) {
     if (devices.isEmpty) {
@@ -112,7 +105,7 @@ class _DeviceList extends StatelessWidget {
       separatorBuilder: (_, _) => const SizedBox(height: 4),
       itemBuilder: (context, index) {
         final device = devices[index];
-        final color = _statusColors[device.status] ?? Colors.blueGrey;
+        final color = AppTheme.statusColor(device.status);
         return Card(
           child: ListTile(
             leading: CircleAvatar(
