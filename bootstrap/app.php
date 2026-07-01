@@ -9,6 +9,7 @@ use App\Http\Middleware\EnsureValidDeviceToken;
 return Application::configure(basePath: dirname(__DIR__))
     ->withProviders([
         Barryvdh\DomPDF\ServiceProvider::class,
+        Laravel\Sanctum\SanctumServiceProvider::class,
     ])
     ->withRouting(
         web: __DIR__.'/../routes/web.php',

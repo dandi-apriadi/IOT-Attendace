@@ -9,6 +9,7 @@
         "barryvdh/laravel-dompdf": "^3.0",
         "jmrashed/zkteco": "^1.2",
         "laravel/framework": "^11.0",
+        "laravel/sanctum": "^4.3",
         "laravel/tinker": "^2.9",
         "phpoffice/phpspreadsheet": "^2.1"
     },

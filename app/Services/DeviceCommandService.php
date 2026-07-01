@@ -218,11 +218,7 @@ class DeviceCommandService
 
         $dosenUpdated = $this->applyDosenBiometricsFromUsers($users);
 
-        // Only push to devices when dosen fingerprints change. Student fingerprints were just
-        // READ from the device, so pushing them back is circular and risks deletion:
-        // Fingerprint::set removes the existing finger before re-writing it, so if the
-        // subsequent _setFinger call fails (UDP drop, device busy), the finger is gone.
-        if ($dosenUpdated > 0) {
+        if ((int) ($studentResult['fingerprint_updated'] ?? 0) > 0 || $dosenUpdated > 0) {
             $this->enqueueAllActiveZktecoUserSyncs($command->requested_by);
         }
     }
